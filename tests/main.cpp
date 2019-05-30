@@ -1,5 +1,5 @@
 #include "fontpp/font.h"
-#include "BMP.h"
+#include "fontpp/stb/stb.h"
 int main()
 {
     fnt::font_atlas atlas{};
@@ -9,8 +9,8 @@ int main()
 
 
     atlas.add_font_default();
-    atlas.build();
 
+    atlas.build(fnt::rasterizer::stb);
 
     uint32_t w{};
     uint32_t h{};

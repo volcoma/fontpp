@@ -2,8 +2,12 @@ file(GLOB_RECURSE libsrc *.h *.cpp *.hpp *.c *.cc)
 
 set(target_name fontpp)
 
+find_package(Freetype REQUIRED)
+
 add_library(${target_name} ${libsrc})
 
+target_link_libraries(${target_name} PRIVATE ${FREETYPE_LIBRARIES})
+target_include_directories(${target_name} PRIVATE ${FREETYPE_INCLUDE_DIRS})
 target_include_directories(${target_name}
     PUBLIC
 		${CMAKE_CURRENT_SOURCE_DIR}/..

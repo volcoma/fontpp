@@ -1,29 +1,8 @@
 #pragma once
-#include <cassert>
-#include <cstddef>
-#include <cstdint>
-#include <cstdlib>
-#include <cstring>
-#include <limits>
-#include <vector>
+#include "utils.h"
 
 namespace fnt
 {
-
-// 2D vector (often used to store positions, sizes, etc.)
-struct vec2
-{
-	float x, y;
-	vec2()
-	{
-		x = y = 0.0f;
-	}
-	vec2(float _x, float _y)
-	{
-		x = _x;
-		y = _y;
-	}
-};
 
 //-----------------------------------------------------------------------------
 // Font API (ImFontConfig, ImFontGlyph, ImFontAtlasFlags, ImFontAtlas, ImFontGlyphRangesBuilder, ImFont)
@@ -36,6 +15,12 @@ struct font_glyph;  // A single font glyph (code point + coordinates within in I
 struct font_glyph_ranges_builder; // Helper to build glyph ranges from text/string data
 using font_wchar = wchar_t; // A single U16 character for keyboard input/display. We encode them as multi
 							// bytes UTF-8 when used in strings.
+
+enum class rasterizer
+{
+    stb,
+    freetype
+};
 
 struct font_config
 {
@@ -67,7 +52,7 @@ struct font_config
 	// Minimum AdvanceX for glyphs, set Min to align font icons, set both Min/Max to enforce mono-space font
 	float glyph_min_advance_x{};
 	// Maximum AdvanceX for glyphs
-	float glyph_min_advance_y{std::numeric_limits<float>::max()};
+	float glyph_max_advance_x{std::numeric_limits<float>::max()};
 	// Merge into previous ImFont, so you can combine multiple inputs font into one ImFont (e.g. ASCII font +
 	// icons + Japanese glyphs). You may want to use GlyphOffset.y when merge font of different heights.
 	bool merge_mode{};
@@ -251,8 +236,6 @@ struct font_atlas
 	// Then store your texture handle with SetTexID(). The pitch is always = Width * BytesPerPixels (1 or 4)
 	// Building in RGBA32 format is provided for convenience and compatibility
 
-	// Build pixels data. This is called automatically for you by the get_tex_data*** functions.
-	bool build();
 	void get_tex_data_as_alpha8(uint8_t** out_pixels, uint32_t* out_width, uint32_t* out_height,
 								uint32_t* out_bytes_per_pixel = nullptr); // 1 byte per-pixel
 	void get_tex_data_as_rgba32(uint8_t** out_pixels, uint32_t* out_width, uint32_t* out_height,
@@ -262,6 +245,11 @@ struct font_atlas
 		return !fonts.empty() && (!tex_pixels_alpha8.empty() || !tex_pixels_rgba32.empty());
 	}
 
+    bool build(rasterizer raster);
+
+    void finish();
+    void setup_font(font_info* font, font_config* font_config, float ascent,
+                                     float descent);
 	//-------------------------------------------
 	// Members
 	//-------------------------------------------

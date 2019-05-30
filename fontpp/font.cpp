@@ -1,13 +1,6 @@
 #include "font.h"
-#include <algorithm>
-#include <cmath>
-#include <cstdio>
-
-#define STB_RECT_PACK_IMPLEMENTATION
-#include "imstb_rectpack.h"
-
-#define STB_TRUETYPE_IMPLEMENTATION
-#include "imstb_truetype.h"
+#include "freetype/freetype.h"
+#include "stb/stb.h"
 
 #define COL32_R_SHIFT 0
 #define COL32_G_SHIFT 8
@@ -18,39 +11,20 @@
 	((uint32_t(A) << COL32_A_SHIFT) | (uint32_t(B) << COL32_B_SHIFT) | (uint32_t(G) << COL32_G_SHIFT) |      \
 	 (uint32_t(R) << COL32_R_SHIFT))
 
-#define IM_ALLOC(_SIZE) std::malloc(size_t(_SIZE))
-#define IM_FREE(_PTR) std::free(_PTR)
-
 namespace fnt
 {
-FILE* ImFileOpen(const char* filename, const char* mode)
-{
-#if defined(_WIN32) && !defined(__CYGWIN__) && !defined(__GNUC__)
-	// We need a fopen() wrapper because MSVC/Windows fopen doesn't handle UTF-8 filenames. Converting both
-	// strings from UTF-8 to wchar format (using a single allocation, because we can)
-	const int filename_wsize = ImTextCountCharsFromUtf8(filename, nullptr) + 1;
-	const int mode_wsize = ImTextCountCharsFromUtf8(mode, nullptr) + 1;
-	std::vector<font_wchar> buf;
-	buf.resize(filename_wsize + mode_wsize);
-	ImTextStrFromUtf8(&buf[0], filename_wsize, filename, nullptr);
-	ImTextStrFromUtf8(&buf[filename_wsize], mode_wsize, mode, nullptr);
-	return _wfopen((wchar_t*)&buf[0], (wchar_t*)&buf[filename_wsize]);
-#else
-	return fopen(filename, mode);
-#endif
-}
 
 // Load file content into memory
-// Memory allocated with IM_ALLOC(), must be freed by user using IM_FREE() == ImGui::MemFree()
-void* ImFileLoadToMemory(const char* filename, const char* file_open_mode, size_t* out_file_size,
-						 size_t padding_bytes)
+// Memory allocated with std::malloc(), must be freed by user using std::free()
+void* file_load_to_memory(const char* filename, const char* file_open_mode, size_t* out_file_size,
+						  size_t padding_bytes)
 {
 	assert(filename && file_open_mode);
 	if(out_file_size)
 		*out_file_size = 0;
 
 	FILE* f;
-	if((f = ImFileOpen(filename, file_open_mode)) == nullptr)
+	if((f = fopen(filename, file_open_mode)) == nullptr)
 		return nullptr;
 
 	long file_size_signed;
@@ -61,7 +35,7 @@ void* ImFileLoadToMemory(const char* filename, const char* file_open_mode, size_
 	}
 
 	auto file_size = static_cast<size_t>(file_size_signed);
-	void* file_data = IM_ALLOC(file_size + padding_bytes);
+	void* file_data = std::malloc(file_size + padding_bytes);
 	if(file_data == nullptr)
 	{
 		fclose(f);
@@ -70,7 +44,7 @@ void* ImFileLoadToMemory(const char* filename, const char* file_open_mode, size_
 	if(fread(file_data, 1, file_size, f) != file_size)
 	{
 		fclose(f);
-		IM_FREE(file_data);
+		std::free(file_data);
 		return nullptr;
 	}
 	if(padding_bytes > 0)
@@ -90,7 +64,7 @@ void* ImFileLoadToMemory(const char* filename, const char* file_open_mode, size_
 // Convert UTF-8 to 32-bits character, process single character input.
 // Based on stb_from_utf8() from github.com/nothings/stb/
 // We handle UTF-8 decoding error by skipping forward.
-int ImTextCharFromUtf8(unsigned int* out_char, const char* in_text, const char* in_text_end)
+int text_char_from_utf8(unsigned int* out_char, const char* in_text, const char* in_text_end)
 {
 	unsigned int c = (unsigned int)-1;
 	const unsigned char* str = (const unsigned char*)in_text;
@@ -164,22 +138,6 @@ int ImTextCharFromUtf8(unsigned int* out_char, const char* in_text, const char* 
 	return 0;
 }
 
-template <typename T>
-static inline T ImClamp(T v, T mn, T mx)
-{
-	return (v < mn) ? mn : (v > mx) ? mx : v;
-}
-static inline uint32_t ImUpperPowerOfTwo(uint32_t v)
-{
-	v--;
-	v |= v >> 1;
-	v |= v >> 2;
-	v |= v >> 4;
-	v |= v >> 8;
-	v |= v >> 16;
-	v++;
-	return v;
-}
 template <typename T, std::size_t N>
 constexpr std::size_t countof(T const (&)[N]) noexcept
 {
@@ -187,401 +145,6 @@ constexpr std::size_t countof(T const (&)[N]) noexcept
 }
 
 const unsigned int IM_TABSIZE = 4;
-
-void font_atlas_build_multiply_calc_lookup_table(unsigned char out_table[256], float in_brighten_factor)
-{
-	for(unsigned int i = 0; i < 256; i++)
-	{
-		auto value = static_cast<unsigned int>(i * in_brighten_factor);
-		out_table[i] = value > 255 ? 255 : (value & 0xFF);
-	}
-}
-
-void font_atlas_build_multiply_rect_alpha8(const unsigned char table[256], unsigned char* pixels, int x,
-										   int y, int w, int h, int stride)
-{
-	unsigned char* data = pixels + x + y * stride;
-	for(int j = h; j > 0; j--, data += stride)
-		for(int i = 0; i < w; i++)
-			data[i] = table[data[i]];
-}
-
-// Helper: ImBoolVector. Store 1-bit per value.
-// Note that Resize() currently clears the whole vector.
-struct ImBoolVector
-{
-	std::vector<int> Storage{};
-	void Resize(int sz)
-	{
-		Storage.resize(size_t((sz + 31) >> 5), 0);
-	}
-	void Clear()
-	{
-		Storage.clear();
-	}
-	bool GetBit(int n) const
-	{
-		int off = (n >> 5);
-		int mask = 1 << (n & 31);
-		return (Storage[size_t(off)] & mask) != 0;
-	}
-	void SetBit(int n, bool v)
-	{
-		int off = (n >> 5);
-		int mask = 1 << (n & 31);
-		if(v)
-			Storage[size_t(off)] |= mask;
-		else
-			Storage[size_t(off)] &= ~mask;
-	}
-};
-
-// Temporary data for one source font (multiple source fonts can be merged into one destination font_info)
-// (C++03 doesn't allow instancing std::vector<> with function-local types so we declare the type here.)
-struct font_info_build_src_data
-{
-	stbtt_fontinfo FontInfo{};
-	// Hold the list of codepoints to pack (essentially points to Codepoints.Data)
-	stbtt_pack_range PackRange{};
-	// Rectangle to pack. We first fill in their size and the packer will give us their position.
-	stbrp_rect* Rects{};
-	// Output glyphs
-	stbtt_packedchar* PackedChars{};
-	// Ranges as requested by user (user is allowed to request too much, e.g. 0x0020..0xFFFF)
-	const font_wchar* SrcRanges{};
-	// Index into atlas->fonts[] and dst_tmp_array[]
-	int DstIndex{};
-	// Highest requested codepoint
-	int GlyphsHighest{};
-	// Glyph count (excluding missing glyphs and glyphs already set by an earlier source font)
-	int GlyphsCount{};
-	// Glyph bit map (random access, 1-bit per codepoint. This will be a maximum of 8KB)
-	ImBoolVector GlyphsSet{};
-	// Glyph codepoints list (flattened version of GlyphsMap)
-	std::vector<int> GlyphsList{};
-};
-
-// Temporary data for one destination font_info* (multiple source fonts can be merged into one destination
-// font_info)
-struct font_info_build_dst_data
-{
-	// Number of source fonts targeting this destination font.
-	int SrcCount{};
-	int GlyphsHighest{};
-	int GlyphsCount{};
-	// This is used to resolve collision when multiple sources are merged into a same destination font.
-	ImBoolVector GlyphsSet{};
-};
-
-static void UnpackBoolVectorToFlatIndexList(const ImBoolVector* in, std::vector<int>* out)
-{
-	assert(sizeof(in->Storage[0]) == sizeof(int));
-	int idx = 0;
-	for(auto entries_32 : in->Storage)
-	{
-		for(int bit_n = 0; bit_n < 32; bit_n++)
-		{
-			if(entries_32 & (1u << bit_n))
-			{
-				out->push_back((idx << 5) + bit_n);
-			}
-		}
-		idx++;
-	}
-}
-
-void font_atlas_build_setup_font(font_atlas* atlas, font_info* font, font_config* font_config, float ascent,
-								 float descent)
-{
-	if(!font_config->merge_mode)
-	{
-		font->clear_output_data();
-		font->font_size = font_config->size_pixels;
-		font->config_data = font_config;
-		font->container_atlas = atlas;
-		font->ascent = ascent;
-		font->descent = descent;
-	}
-	font->config_data_count++;
-}
-
-void font_atlas_build_finish(font_atlas* atlas)
-{
-	// Build all fonts lookup tables
-	for(auto& font : atlas->fonts)
-		if(font->dirty_lookup_tables)
-			font->build_lookup_table();
-}
-
-bool font_atlas_build_with_stb_truetype(font_atlas* atlas)
-{
-	assert(atlas->config_data.size() > 0);
-	// Clear atlas
-	atlas->tex_width = atlas->tex_height = 0;
-	atlas->clear_tex_data();
-
-	// Temporary storage for building
-	std::vector<font_info_build_src_data> src_tmp_array;
-	std::vector<font_info_build_dst_data> dst_tmp_array;
-	src_tmp_array.resize(atlas->config_data.size());
-	dst_tmp_array.resize(atlas->fonts.size());
-
-	// 1. Initialize font loading structure, check font data validity
-	for(size_t src_i = 0; src_i < atlas->config_data.size(); src_i++)
-	{
-		font_info_build_src_data& src_tmp = src_tmp_array[src_i];
-		font_config& cfg = atlas->config_data[src_i];
-		assert(cfg.dst_font && (!cfg.dst_font->is_loaded() || cfg.dst_font->container_atlas == atlas));
-
-		// Find index from cfg.DstFont (we allow the user to set cfg.DstFont. Also it makes casual debugging
-		// nicer than when storing indices)
-		src_tmp.DstIndex = -1;
-		for(size_t output_i = 0; output_i < atlas->fonts.size() && src_tmp.DstIndex == -1; output_i++)
-			if(cfg.dst_font == atlas->fonts[output_i])
-				src_tmp.DstIndex = static_cast<int>(output_i);
-		assert(src_tmp.DstIndex != -1); // cfg.DstFont not pointing within atlas->fonts[] array?
-		if(src_tmp.DstIndex == -1)
-			return false;
-
-		// Initialize helper structure for font loading and verify that the TTF/OTF data is correct
-		const int font_offset = stbtt_GetFontOffsetForIndex((unsigned char*)cfg.font_data, cfg.font_no);
-		assert(font_offset >= 0 && "FontData is incorrect, or FontNo cannot be found.");
-		if(!stbtt_InitFont(&src_tmp.FontInfo, (unsigned char*)cfg.font_data, font_offset))
-			return false;
-
-		// Measure highest codepoints
-		font_info_build_dst_data& dst_tmp = dst_tmp_array[size_t(src_tmp.DstIndex)];
-		src_tmp.SrcRanges = cfg.glyph_ranges ? cfg.glyph_ranges : get_glyph_ranges_default();
-		for(const font_wchar* src_range = src_tmp.SrcRanges; src_range[0] && src_range[1]; src_range += 2)
-			src_tmp.GlyphsHighest = std::max(src_tmp.GlyphsHighest, int(src_range[1]));
-		dst_tmp.SrcCount++;
-		dst_tmp.GlyphsHighest = std::max(dst_tmp.GlyphsHighest, src_tmp.GlyphsHighest);
-	}
-
-	// 2. For every requested codepoint, check for their presence in the font data, and handle redundancy or
-	// overlaps between source fonts to avoid unused glyphs.
-	size_t total_glyphs_count = 0;
-	for(auto& src_tmp : src_tmp_array)
-	{
-		font_info_build_dst_data& dst_tmp = dst_tmp_array[size_t(src_tmp.DstIndex)];
-		src_tmp.GlyphsSet.Resize(src_tmp.GlyphsHighest + 1);
-		if(dst_tmp.GlyphsSet.Storage.empty())
-			dst_tmp.GlyphsSet.Resize(dst_tmp.GlyphsHighest + 1);
-
-		for(const font_wchar* src_range = src_tmp.SrcRanges; src_range[0] && src_range[1]; src_range += 2)
-			for(int codepoint = src_range[0]; codepoint <= src_range[1]; codepoint++)
-			{
-				if(dst_tmp.GlyphsSet.GetBit(codepoint)) // Don't overwrite existing glyphs. We could make this
-														// an option for MergeMode (e.g. MergeOverwrite==true)
-					continue;
-				if(!stbtt_FindGlyphIndex(&src_tmp.FontInfo, codepoint)) // It is actually in the font?
-					continue;
-
-				// Add to avail set/counters
-				src_tmp.GlyphsCount++;
-				dst_tmp.GlyphsCount++;
-				src_tmp.GlyphsSet.SetBit(codepoint, true);
-				dst_tmp.GlyphsSet.SetBit(codepoint, true);
-				total_glyphs_count++;
-			}
-	}
-
-	// 3. Unpack our bit map into a flat list (we now have all the Unicode points that we know are requested
-	// _and_ available _and_ not overlapping another)
-	for(auto& src_tmp : src_tmp_array)
-	{
-		src_tmp.GlyphsList.reserve(size_t(src_tmp.GlyphsCount));
-		UnpackBoolVectorToFlatIndexList(&src_tmp.GlyphsSet, &src_tmp.GlyphsList);
-		src_tmp.GlyphsSet.Clear();
-		assert(src_tmp.GlyphsList.size() == size_t(src_tmp.GlyphsCount));
-	}
-	for(auto& dst_i : dst_tmp_array)
-		dst_i.GlyphsSet.Clear();
-	dst_tmp_array.clear();
-
-	// Allocate packing character data and flag packed characters buffer as non-packed (x0=y0=x1=y1=0)
-	// (We technically don't need to zero-clear buf_rects, but let's do it for the sake of sanity)
-	std::vector<stbrp_rect> buf_rects;
-	std::vector<stbtt_packedchar> buf_packedchars;
-	buf_rects.resize(total_glyphs_count);
-	buf_packedchars.resize(total_glyphs_count);
-
-	// 4. Gather glyphs sizes so we can pack them in our virtual canvas.
-	size_t total_surface = 0;
-	size_t buf_rects_out_n = 0;
-	size_t buf_packedchars_out_n = 0;
-	for(size_t src_i = 0; src_i < src_tmp_array.size(); src_i++)
-	{
-		font_info_build_src_data& src_tmp = src_tmp_array[src_i];
-		if(src_tmp.GlyphsCount == 0)
-			continue;
-
-		src_tmp.Rects = &buf_rects[buf_rects_out_n];
-		src_tmp.PackedChars = &buf_packedchars[buf_packedchars_out_n];
-		buf_rects_out_n += size_t(src_tmp.GlyphsCount);
-		buf_packedchars_out_n += size_t(src_tmp.GlyphsCount);
-
-		// Convert our ranges in the format stb_truetype wants
-		font_config& cfg = atlas->config_data[src_i];
-		src_tmp.PackRange.font_size = cfg.size_pixels;
-		src_tmp.PackRange.first_unicode_codepoint_in_range = 0;
-		src_tmp.PackRange.array_of_unicode_codepoints = src_tmp.GlyphsList.data();
-		src_tmp.PackRange.num_chars = static_cast<int>(src_tmp.GlyphsList.size());
-		src_tmp.PackRange.chardata_for_range = src_tmp.PackedChars;
-		src_tmp.PackRange.h_oversample = static_cast<unsigned char>(cfg.oversample_h);
-		src_tmp.PackRange.v_oversample = static_cast<unsigned char>(cfg.oversample_v);
-
-		// Gather the sizes of all rectangles we will need to pack (this loop is based on
-		// stbtt_PackFontRangesGatherRects)
-		const float scale = (cfg.size_pixels > 0)
-								? stbtt_ScaleForPixelHeight(&src_tmp.FontInfo, cfg.size_pixels)
-								: stbtt_ScaleForMappingEmToPixels(&src_tmp.FontInfo, -cfg.size_pixels);
-		const int padding = int(atlas->tex_glyph_padding);
-		for(size_t glyph_i = 0; glyph_i < src_tmp.GlyphsList.size(); glyph_i++)
-		{
-			int x0, y0, x1, y1;
-			const int glyph_index_in_font =
-				stbtt_FindGlyphIndex(&src_tmp.FontInfo, src_tmp.GlyphsList[glyph_i]);
-			assert(glyph_index_in_font != 0);
-			stbtt_GetGlyphBitmapBoxSubpixel(&src_tmp.FontInfo, glyph_index_in_font, scale * cfg.oversample_h,
-											scale * cfg.oversample_v, 0, 0, &x0, &y0, &x1, &y1);
-			src_tmp.Rects[glyph_i].w = stbrp_coord(x1 - x0 + padding + cfg.oversample_h - 1);
-			src_tmp.Rects[glyph_i].h = stbrp_coord(y1 - y0 + padding + cfg.oversample_v - 1);
-			total_surface += src_tmp.Rects[glyph_i].w * src_tmp.Rects[glyph_i].h;
-		}
-	}
-
-	// We need a width for the skyline algorithm, any width!
-	// The exact width doesn't really matter much, but some API/GPU have texture size limitations and
-	// increasing width can decrease height. User can override TexDesiredWidth and TexGlyphPadding if they
-	// wish, otherwise we use a simple heuristic to select the width based on expected surface.
-	const int surface_sqrt = int(std::sqrt(total_surface)) + 1;
-	atlas->tex_height = 0;
-	if(atlas->tex_desired_width > 0)
-		atlas->tex_width = atlas->tex_desired_width;
-	else
-		atlas->tex_width =
-			(surface_sqrt >= 4096 * 0.7f)
-				? 4096
-				: (surface_sqrt >= 2048 * 0.7f) ? 2048 : (surface_sqrt >= 1024 * 0.7f) ? 1024 : 512;
-
-	// 5. Start packing
-	// Pack our extra data rectangles first, so it will be on the upper-left corner of our texture (UV will
-	// have small values).
-	const int TEX_HEIGHT_MAX = 1024 * 32;
-	stbtt_pack_context spc = {};
-	stbtt_PackBegin(&spc, nullptr, int(atlas->tex_width), TEX_HEIGHT_MAX, 0, int(atlas->tex_glyph_padding),
-					nullptr);
-
-	// 6. Pack each source font. No rendering yet, we are working with rectangles in an infinitely tall
-	// texture at this point.
-	for(auto& src_tmp : src_tmp_array)
-	{
-		if(src_tmp.GlyphsCount == 0)
-			continue;
-
-		stbrp_pack_rects(reinterpret_cast<stbrp_context*>(spc.pack_info), src_tmp.Rects, src_tmp.GlyphsCount);
-
-		// Extend texture height and mark missing glyphs as non-packed so we won't render them.
-		// FIXME: We are not handling packing failure here (would happen if we got off TEX_HEIGHT_MAX or if a
-		// single if larger than TexWidth?)
-		for(int glyph_i = 0; glyph_i < src_tmp.GlyphsCount; glyph_i++)
-			if(src_tmp.Rects[glyph_i].was_packed)
-				atlas->tex_height = std::max<uint32_t>(atlas->tex_height,
-													   src_tmp.Rects[glyph_i].y + src_tmp.Rects[glyph_i].h);
-	}
-
-	// 7. Allocate texture
-	atlas->tex_height = (atlas->flags & font_atlas_flags::no_power_of_two_height)
-							? (atlas->tex_height + 1)
-							: ImUpperPowerOfTwo(atlas->tex_height);
-
-	if(atlas->tex_width == 0 || atlas->tex_height == 0)
-	{
-		return false;
-	}
-
-	atlas->tex_pixels_alpha8.resize(size_t(atlas->tex_width * atlas->tex_height), 0);
-	spc.pixels = atlas->tex_pixels_alpha8.data();
-	spc.height = int(atlas->tex_height);
-
-	// 8. Render/rasterize font characters into the texture
-	for(size_t src_i = 0; src_i < src_tmp_array.size(); src_i++)
-	{
-		font_config& cfg = atlas->config_data[src_i];
-		font_info_build_src_data& src_tmp = src_tmp_array[src_i];
-		if(src_tmp.GlyphsCount == 0)
-			continue;
-
-		stbtt_PackFontRangesRenderIntoRects(&spc, &src_tmp.FontInfo, &src_tmp.PackRange, 1, src_tmp.Rects);
-
-		// Apply multiply operator
-		if(cfg.rasterizer_multiply != 1.0f)
-		{
-			unsigned char multiply_table[256];
-			font_atlas_build_multiply_calc_lookup_table(multiply_table, cfg.rasterizer_multiply);
-			stbrp_rect* r = &src_tmp.Rects[0];
-			for(int glyph_i = 0; glyph_i < src_tmp.GlyphsCount; glyph_i++, r++)
-				if(r->was_packed)
-					font_atlas_build_multiply_rect_alpha8(multiply_table, atlas->tex_pixels_alpha8.data(),
-														  r->x, r->y, r->w, r->h, int(atlas->tex_width * 1));
-		}
-		src_tmp.Rects = nullptr;
-	}
-
-	// End packing
-	stbtt_PackEnd(&spc);
-	buf_rects.clear();
-
-	// 9. Setup font_info and glyphs for runtime
-	for(size_t src_i = 0; src_i < src_tmp_array.size(); src_i++)
-	{
-		font_info_build_src_data& src_tmp = src_tmp_array[src_i];
-		if(src_tmp.GlyphsCount == 0)
-			continue;
-
-		font_config& cfg = atlas->config_data[src_i];
-		font_info* dst_font = cfg.dst_font; // We can have multiple input fonts writing into a same destination
-										   // font (when using MergeMode=true)
-
-		const float font_scale = stbtt_ScaleForPixelHeight(&src_tmp.FontInfo, cfg.size_pixels);
-		int unscaled_ascent, unscaled_descent, unscaled_line_gap;
-		stbtt_GetFontVMetrics(&src_tmp.FontInfo, &unscaled_ascent, &unscaled_descent, &unscaled_line_gap);
-
-		const float ascent = std::floor(unscaled_ascent * font_scale + ((unscaled_ascent > 0.0f) ? +1 : -1));
-		const float descent =
-			std::floor(unscaled_descent * font_scale + ((unscaled_descent > 0.0f) ? +1 : -1));
-		font_atlas_build_setup_font(atlas, dst_font, &cfg, ascent, descent);
-		const float font_off_x = cfg.glyph_offset.x;
-		const float font_off_y = cfg.glyph_offset.y + (float)(int)(dst_font->ascent + 0.5f);
-
-		for(int glyph_i = 0; glyph_i < src_tmp.GlyphsCount; glyph_i++)
-		{
-			const int codepoint = src_tmp.GlyphsList[size_t(glyph_i)];
-			const stbtt_packedchar& pc = src_tmp.PackedChars[glyph_i];
-
-			const float char_advance_x_org = pc.xadvance;
-			const float char_advance_x_mod =
-				ImClamp(char_advance_x_org, cfg.glyph_min_advance_x, cfg.glyph_min_advance_y);
-			float char_off_x = font_off_x;
-			if(char_advance_x_org != char_advance_x_mod)
-				char_off_x += cfg.pixel_snap_h ? (float)(int)((char_advance_x_mod - char_advance_x_org) * 0.5f)
-											 : (char_advance_x_mod - char_advance_x_org) * 0.5f;
-
-			// Register glyph
-			stbtt_aligned_quad q;
-			float dummy_x = 0.0f, dummy_y = 0.0f;
-			stbtt_GetPackedQuad(src_tmp.PackedChars, int(atlas->tex_width), int(atlas->tex_height), glyph_i,
-								&dummy_x, &dummy_y, &q, 0);
-			dst_font->add_glyph(font_wchar(codepoint), q.x0 + char_off_x, q.y0 + font_off_y,
-								q.x1 + char_off_x, q.y1 + font_off_y, q.s0, q.t0, q.s1, q.t1,
-								char_advance_x_mod);
-		}
-	}
-
-	font_atlas_build_finish(atlas);
-	return true;
-}
 
 //-----------------------------------------------------------------------------
 // [SECTION] font_atlas
@@ -597,7 +160,7 @@ void font_atlas::clear_input_data()
 	for(auto& i : config_data)
 		if(i.font_data && i.font_data_owned_by_atlas)
 		{
-			IM_FREE(i.font_data);
+			std::free(i.font_data);
 			i.font_data = nullptr;
 		}
 
@@ -635,12 +198,9 @@ void font_atlas::clear()
 void font_atlas::get_tex_data_as_alpha8(uint8_t** out_pixels, uint32_t* out_width, uint32_t* out_height,
 										uint32_t* out_bytes_per_pixel)
 {
-	// Build atlas on demand
 	if(tex_pixels_alpha8.empty())
 	{
-		if(config_data.empty())
-			add_font_default();
-		build();
+		return;
 	}
 
 	*out_pixels = tex_pixels_alpha8.data();
@@ -663,7 +223,7 @@ void font_atlas::get_tex_data_as_rgba32(uint8_t** out_pixels, uint32_t* out_widt
 		get_tex_data_as_alpha8(&pixels, nullptr, nullptr);
 		if(pixels)
 		{
-			tex_pixels_rgba32.resize(size_t(tex_width * tex_height), 0);
+			tex_pixels_rgba32.resize(tex_width * tex_height, 0);
 			const uint8_t* src = pixels;
 			uint32_t* dst = tex_pixels_rgba32.data();
 			for(uint32_t n = tex_width * tex_height; n > 0; n--)
@@ -678,6 +238,41 @@ void font_atlas::get_tex_data_as_rgba32(uint8_t** out_pixels, uint32_t* out_widt
 		*out_height = tex_height;
 	if(out_bytes_per_pixel)
 		*out_bytes_per_pixel = 4;
+}
+
+bool font_atlas::build(rasterizer raster)
+{
+	switch(raster)
+	{
+		case rasterizer::freetype:
+			return freetype::build(this);
+		case rasterizer::stb:
+			return stb::build(this);
+	}
+
+    return is_built();
+}
+
+void font_atlas::finish()
+{
+	// Build all fonts lookup tables
+	for(auto& font : fonts)
+		if(font->dirty_lookup_tables)
+			font->build_lookup_table();
+}
+
+void font_atlas::setup_font(font_info* font, font_config* font_config, float ascent, float descent)
+{
+	if(!font_config->merge_mode)
+	{
+		font->clear_output_data();
+		font->font_size = font_config->size_pixels;
+		font->config_data = font_config;
+		font->container_atlas = this;
+		font->ascent = ascent;
+		font->descent = descent;
+	}
+	font->config_data_count++;
 }
 
 font_info* font_atlas::add_font(const font_config* font_cfg)
@@ -701,7 +296,7 @@ font_info* font_atlas::add_font(const font_config* font_cfg)
 		new_font_cfg.dst_font = fonts.back();
 	if(!new_font_cfg.font_data_owned_by_atlas)
 	{
-		new_font_cfg.font_data = IM_ALLOC(new_font_cfg.font_data_size);
+		new_font_cfg.font_data = std::malloc(new_font_cfg.font_data_size);
 		new_font_cfg.font_data_owned_by_atlas = true;
 		memcpy(new_font_cfg.font_data, font_cfg->font_data, new_font_cfg.font_data_size);
 	}
@@ -763,7 +358,7 @@ font_info* font_atlas::add_font_from_file_ttf(const char* filename, float size_p
 											  const font_wchar* glyph_ranges)
 {
 	size_t data_size = 0;
-	void* data = ImFileLoadToMemory(filename, "rb", &data_size, 0);
+	void* data = file_load_to_memory(filename, "rb", &data_size, 0);
 	if(!data)
 	{
 		assert(0); // Could not load file.
@@ -774,7 +369,7 @@ font_info* font_atlas::add_font_from_file_ttf(const char* filename, float size_p
 }
 
 // NB: Transfer ownership of 'ttf_data' to font_atlas, unless font_cfg_template->FontDataOwnedByAtlas ==
-// false. Owned TTF buffer will be deleted after Build().
+// false. Owned TTF buffer will be deleted after build().
 font_info* font_atlas::add_font_from_memory_ttf(void* ttf_data, size_t ttf_size, float size_pixels,
 												const font_config* font_cfg_template,
 												const font_wchar* glyph_ranges)
@@ -796,7 +391,7 @@ font_info* font_atlas::add_font_from_memory_compressed_ttf(const void* compresse
 {
 	const unsigned int buf_decompressed_size =
 		stb_decompress_length((const unsigned char*)compressed_ttf_data);
-	unsigned char* buf_decompressed_data = (unsigned char*)IM_ALLOC(buf_decompressed_size);
+	unsigned char* buf_decompressed_data = (unsigned char*)std::malloc(buf_decompressed_size);
 	stb_decompress(buf_decompressed_data, (const unsigned char*)compressed_ttf_data,
 				   (unsigned int)compressed_ttf_size);
 
@@ -813,17 +408,12 @@ font_info* font_atlas::add_font_from_memory_compressed_base85_ttf(const char* co
 																  const font_wchar* glyph_ranges)
 {
 	size_t compressed_ttf_size = ((strlen(compressed_ttf_data_base85) + 4) / 5) * 4;
-	void* compressed_ttf = IM_ALLOC((size_t)compressed_ttf_size);
+	void* compressed_ttf = std::malloc((size_t)compressed_ttf_size);
 	Decode85((const unsigned char*)compressed_ttf_data_base85, (unsigned char*)compressed_ttf);
 	font_info* font = add_font_from_memory_compressed_ttf(compressed_ttf, compressed_ttf_size, size_pixels,
 														  font_cfg, glyph_ranges);
-	IM_FREE(compressed_ttf);
+	std::free(compressed_ttf);
 	return font;
-}
-
-bool font_atlas::build()
-{
-	return font_atlas_build_with_stb_truetype(this);
 }
 
 // Retrieve list of range (2 int per range, values are inclusive)
@@ -1177,7 +767,7 @@ void font_glyph_ranges_builder::add_text(const char* text, const char* text_end)
 	while(text_end ? (text < text_end) : *text)
 	{
 		unsigned int c = 0;
-		int c_len = ImTextCharFromUtf8(&c, text, text_end);
+		int c_len = text_char_from_utf8(&c, text, text_end);
 		text += c_len;
 		if(c_len == 0)
 			break;
@@ -1195,7 +785,7 @@ void font_glyph_ranges_builder::add_ranges(const font_wchar* ranges)
 
 std::vector<font_wchar> font_glyph_ranges_builder::build_ranges()
 {
-    std::vector<font_wchar> out_ranges;
+	std::vector<font_wchar> out_ranges;
 	int max_codepoint = 0x10000;
 	for(int n = 0; n < max_codepoint; n++)
 		if(get_bit(n))
@@ -1206,7 +796,7 @@ std::vector<font_wchar> font_glyph_ranges_builder::build_ranges()
 			out_ranges.push_back(font_wchar(n));
 		}
 	out_ranges.push_back(0);
-    return out_ranges;
+	return out_ranges;
 }
 
 //-----------------------------------------------------------------------------
@@ -1350,175 +940,6 @@ const font_glyph* font_info::find_glyph_no_fallback(font_wchar c) const
 	if(i == font_wchar(-1))
 		return nullptr;
 	return &glyphs[i];
-}
-
-//-----------------------------------------------------------------------------
-// [SECTION] Decompression code
-//-----------------------------------------------------------------------------
-// Compressed with stb_compress() then converted to a C array and encoded as base85.
-// Use the program in misc/fonts/binary_to_compressed_c.cpp to create the array from a TTF file.
-// The purpose of encoding as base85 instead of "0x00,0x01,..." style is only save on _source code_ size.
-// Decompression from stb.h (public domain) by Sean Barrett https://github.com/nothings/stb/blob/master/stb.h
-//-----------------------------------------------------------------------------
-
-static unsigned int stb_decompress_length(const unsigned char* input)
-{
-	return (input[8] << 24) + (input[9] << 16) + (input[10] << 8) + input[11];
-}
-
-static unsigned char *stb__barrier_out_e, *stb__barrier_out_b;
-static const unsigned char* stb__barrier_in_b;
-static unsigned char* stb__dout;
-static void stb__match(const unsigned char* data, unsigned int length)
-{
-	// INVERSE of memmove... write each byte before copying the next...
-	assert(stb__dout + length <= stb__barrier_out_e);
-	if(stb__dout + length > stb__barrier_out_e)
-	{
-		stb__dout += length;
-		return;
-	}
-	if(data < stb__barrier_out_b)
-	{
-		stb__dout = stb__barrier_out_e + 1;
-		return;
-	}
-	while(length--)
-		*stb__dout++ = *data++;
-}
-
-static void stb__lit(const unsigned char* data, unsigned int length)
-{
-	assert(stb__dout + length <= stb__barrier_out_e);
-	if(stb__dout + length > stb__barrier_out_e)
-	{
-		stb__dout += length;
-		return;
-	}
-	if(data < stb__barrier_in_b)
-	{
-		stb__dout = stb__barrier_out_e + 1;
-		return;
-	}
-	memcpy(stb__dout, data, length);
-	stb__dout += length;
-}
-
-#define stb__in2(x) ((i[x] << 8) + i[(x) + 1])
-#define stb__in3(x) ((i[x] << 16) + stb__in2((x) + 1))
-#define stb__in4(x) ((i[x] << 24) + stb__in3((x) + 1))
-
-static const unsigned char* stb_decompress_token(const unsigned char* i)
-{
-	if(*i >= 0x20)
-	{ // use fewer if's for cases that expand small
-		if(*i >= 0x80)
-			stb__match(stb__dout - i[1] - 1, i[0] - 0x80 + 1), i += 2;
-		else if(*i >= 0x40)
-			stb__match(stb__dout - (stb__in2(0) - 0x4000 + 1), i[2] + 1), i += 3;
-		else /* *i >= 0x20 */
-			stb__lit(i + 1, i[0] - 0x20 + 1), i += 1 + (i[0] - 0x20 + 1);
-	}
-	else
-	{ // more ifs for cases that expand large, since overhead is amortized
-		if(*i >= 0x18)
-			stb__match(stb__dout - (stb__in3(0) - 0x180000 + 1), i[3] + 1), i += 4;
-		else if(*i >= 0x10)
-			stb__match(stb__dout - (stb__in3(0) - 0x100000 + 1), stb__in2(3) + 1), i += 5;
-		else if(*i >= 0x08)
-			stb__lit(i + 2, stb__in2(0) - 0x0800 + 1), i += 2 + (stb__in2(0) - 0x0800 + 1);
-		else if(*i == 0x07)
-			stb__lit(i + 3, stb__in2(1) + 1), i += 3 + (stb__in2(1) + 1);
-		else if(*i == 0x06)
-			stb__match(stb__dout - (stb__in3(1) + 1), i[4] + 1), i += 5;
-		else if(*i == 0x04)
-			stb__match(stb__dout - (stb__in3(1) + 1), stb__in2(4) + 1), i += 6;
-	}
-	return i;
-}
-
-static unsigned int stb_adler32(unsigned int adler32, unsigned char* buffer, unsigned int buflen)
-{
-	const unsigned long ADLER_MOD = 65521;
-	unsigned long s1 = adler32 & 0xffff, s2 = adler32 >> 16;
-	unsigned long blocklen, i;
-
-	blocklen = buflen % 5552;
-	while(buflen)
-	{
-		for(i = 0; i + 7 < blocklen; i += 8)
-		{
-			s1 += buffer[0];
-			s2 += s1;
-			s1 += buffer[1];
-			s2 += s1;
-			s1 += buffer[2];
-			s2 += s1;
-			s1 += buffer[3];
-			s2 += s1;
-			s1 += buffer[4];
-			s2 += s1;
-			s1 += buffer[5];
-			s2 += s1;
-			s1 += buffer[6];
-			s2 += s1;
-			s1 += buffer[7];
-			s2 += s1;
-
-			buffer += 8;
-		}
-
-		for(; i < blocklen; ++i)
-		{
-			s1 += *buffer++;
-			s2 += s1;
-		}
-		s1 %= ADLER_MOD, s2 %= ADLER_MOD;
-		buflen -= blocklen;
-		blocklen = 5552;
-	}
-	return (unsigned int)(s2 << 16) + (unsigned int)s1;
-}
-
-static unsigned int stb_decompress(unsigned char* output, const unsigned char* i, unsigned int /*length*/)
-{
-	unsigned int olen;
-	if(stb__in4(0) != 0x57bC0000)
-		return 0;
-	if(stb__in4(4) != 0)
-		return 0; // error! stream is > 4GB
-	olen = stb_decompress_length(i);
-	stb__barrier_in_b = i;
-	stb__barrier_out_e = output + olen;
-	stb__barrier_out_b = output;
-	i += 16;
-
-	stb__dout = output;
-	for(;;)
-	{
-		const unsigned char* old_i = i;
-		i = stb_decompress_token(i);
-		if(i == old_i)
-		{
-			if(*i == 0x05 && i[1] == 0xfa)
-			{
-				assert(stb__dout == output + olen);
-				if(stb__dout != output + olen)
-					return 0;
-				if(stb_adler32(1, output, olen) != (unsigned int)stb__in4(2))
-					return 0;
-				return olen;
-			}
-			else
-			{
-				assert(0); /* NOTREACHED */
-				return 0;
-			}
-		}
-		assert(stb__dout <= output + olen);
-		if(stb__dout > output + olen)
-			return 0;
-	}
 }
 
 //-----------------------------------------------------------------------------
@@ -1716,5 +1137,174 @@ static const char proggy_clean_ttf_compressed_data_base85[11980 + 1] =
 static const char* GetDefaultCompressedFontDataTTFBase85()
 {
 	return proggy_clean_ttf_compressed_data_base85;
+}
+
+//-----------------------------------------------------------------------------
+// [SECTION] Decompression code
+//-----------------------------------------------------------------------------
+// Compressed with stb_compress() then converted to a C array and encoded as base85.
+// Use the program in misc/fonts/binary_to_compressed_c.cpp to create the array from a TTF file.
+// The purpose of encoding as base85 instead of "0x00,0x01,..." style is only save on _source code_ size.
+// Decompression from stb.h (public domain) by Sean Barrett https://github.com/nothings/stb/blob/master/stb.h
+//-----------------------------------------------------------------------------
+
+static unsigned int stb_decompress_length(const unsigned char* input)
+{
+	return (input[8] << 24) + (input[9] << 16) + (input[10] << 8) + input[11];
+}
+
+static unsigned char *stb__barrier_out_e, *stb__barrier_out_b;
+static const unsigned char* stb__barrier_in_b;
+static unsigned char* stb__dout;
+static void stb__match(const unsigned char* data, unsigned int length)
+{
+	// INVERSE of memmove... write each byte before copying the next...
+	assert(stb__dout + length <= stb__barrier_out_e);
+	if(stb__dout + length > stb__barrier_out_e)
+	{
+		stb__dout += length;
+		return;
+	}
+	if(data < stb__barrier_out_b)
+	{
+		stb__dout = stb__barrier_out_e + 1;
+		return;
+	}
+	while(length--)
+		*stb__dout++ = *data++;
+}
+
+static void stb__lit(const unsigned char* data, unsigned int length)
+{
+	assert(stb__dout + length <= stb__barrier_out_e);
+	if(stb__dout + length > stb__barrier_out_e)
+	{
+		stb__dout += length;
+		return;
+	}
+	if(data < stb__barrier_in_b)
+	{
+		stb__dout = stb__barrier_out_e + 1;
+		return;
+	}
+	memcpy(stb__dout, data, length);
+	stb__dout += length;
+}
+
+#define stb__in2(x) ((i[x] << 8) + i[(x) + 1])
+#define stb__in3(x) ((i[x] << 16) + stb__in2((x) + 1))
+#define stb__in4(x) ((i[x] << 24) + stb__in3((x) + 1))
+
+static const unsigned char* stb_decompress_token(const unsigned char* i)
+{
+	if(*i >= 0x20)
+	{ // use fewer if's for cases that expand small
+		if(*i >= 0x80)
+			stb__match(stb__dout - i[1] - 1, i[0] - 0x80 + 1), i += 2;
+		else if(*i >= 0x40)
+			stb__match(stb__dout - (stb__in2(0) - 0x4000 + 1), i[2] + 1), i += 3;
+		else /* *i >= 0x20 */
+			stb__lit(i + 1, i[0] - 0x20 + 1), i += 1 + (i[0] - 0x20 + 1);
+	}
+	else
+	{ // more ifs for cases that expand large, since overhead is amortized
+		if(*i >= 0x18)
+			stb__match(stb__dout - (stb__in3(0) - 0x180000 + 1), i[3] + 1), i += 4;
+		else if(*i >= 0x10)
+			stb__match(stb__dout - (stb__in3(0) - 0x100000 + 1), stb__in2(3) + 1), i += 5;
+		else if(*i >= 0x08)
+			stb__lit(i + 2, stb__in2(0) - 0x0800 + 1), i += 2 + (stb__in2(0) - 0x0800 + 1);
+		else if(*i == 0x07)
+			stb__lit(i + 3, stb__in2(1) + 1), i += 3 + (stb__in2(1) + 1);
+		else if(*i == 0x06)
+			stb__match(stb__dout - (stb__in3(1) + 1), i[4] + 1), i += 5;
+		else if(*i == 0x04)
+			stb__match(stb__dout - (stb__in3(1) + 1), stb__in2(4) + 1), i += 6;
+	}
+	return i;
+}
+
+static unsigned int stb_adler32(unsigned int adler32, unsigned char* buffer, unsigned int buflen)
+{
+	const unsigned long ADLER_MOD = 65521;
+	unsigned long s1 = adler32 & 0xffff, s2 = adler32 >> 16;
+	unsigned long blocklen, i;
+
+	blocklen = buflen % 5552;
+	while(buflen)
+	{
+		for(i = 0; i + 7 < blocklen; i += 8)
+		{
+			s1 += buffer[0];
+			s2 += s1;
+			s1 += buffer[1];
+			s2 += s1;
+			s1 += buffer[2];
+			s2 += s1;
+			s1 += buffer[3];
+			s2 += s1;
+			s1 += buffer[4];
+			s2 += s1;
+			s1 += buffer[5];
+			s2 += s1;
+			s1 += buffer[6];
+			s2 += s1;
+			s1 += buffer[7];
+			s2 += s1;
+
+			buffer += 8;
+		}
+
+		for(; i < blocklen; ++i)
+		{
+			s1 += *buffer++;
+			s2 += s1;
+		}
+		s1 %= ADLER_MOD, s2 %= ADLER_MOD;
+		buflen -= blocklen;
+		blocklen = 5552;
+	}
+	return (unsigned int)(s2 << 16) + (unsigned int)s1;
+}
+
+static unsigned int stb_decompress(unsigned char* output, const unsigned char* i, unsigned int /*length*/)
+{
+	unsigned int olen;
+	if(stb__in4(0) != 0x57bC0000)
+		return 0;
+	if(stb__in4(4) != 0)
+		return 0; // error! stream is > 4GB
+	olen = stb_decompress_length(i);
+	stb__barrier_in_b = i;
+	stb__barrier_out_e = output + olen;
+	stb__barrier_out_b = output;
+	i += 16;
+
+	stb__dout = output;
+	for(;;)
+	{
+		const unsigned char* old_i = i;
+		i = stb_decompress_token(i);
+		if(i == old_i)
+		{
+			if(*i == 0x05 && i[1] == 0xfa)
+			{
+				assert(stb__dout == output + olen);
+				if(stb__dout != output + olen)
+					return 0;
+				if(stb_adler32(1, output, olen) != (unsigned int)stb__in4(2))
+					return 0;
+				return olen;
+			}
+			else
+			{
+				assert(0); /* NOTREACHED */
+				return 0;
+			}
+		}
+		assert(stb__dout <= output + olen);
+		if(stb__dout > output + olen)
+			return 0;
+	}
 }
 } // namespace library_template
