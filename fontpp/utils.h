@@ -8,6 +8,7 @@
 #include <cstring>
 #include <limits>
 #include <vector>
+#include <algorithm>
 
 namespace fnt
 {
