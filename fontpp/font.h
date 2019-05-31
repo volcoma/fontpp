@@ -239,7 +239,7 @@ struct font_atlas
 	/// User is in charge of copying the pixels into graphics memory (e.g. create a texture with your engine).
 	/// The pitch is always = Width * BytesPerPixels (1 or 4)
 	/// Building in RGBA32 format is provided for convenience and compatibility
-	bool build(font_rasterizer raster);
+	bool build(font_rasterizer raster, std::string& err);
 	void get_tex_data_as_alpha8(uint8_t** out_pixels, uint32_t* out_width, uint32_t* out_height,
 								uint32_t* out_bytes_per_pixel = nullptr); // 1 byte per-pixel
 	void get_tex_data_as_rgba32(uint8_t** out_pixels, uint32_t* out_width, uint32_t* out_height,
@@ -272,7 +272,7 @@ struct font_atlas
 	font_atlas_flags flags{font_atlas_flags::none};
 
 	// Max texture size allowed. Must be a power of 2
-	uint32_t max_texture_size{};
+	uint32_t max_texture_size{4096};
 	// Padding between glyphs within texture in pixels. Defaults to 1. If your rendering
 	// method doesn't rely on bilinear filtering you may set this to 0.
 	uint32_t tex_glyph_padding{1};

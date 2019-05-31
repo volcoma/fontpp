@@ -321,7 +321,7 @@ void font_atlas::get_tex_data_as_rgba32(uint8_t** out_pixels, uint32_t* out_widt
 		*out_bytes_per_pixel = 4;
 }
 
-bool font_atlas::build(font_rasterizer raster)
+bool font_atlas::build(font_rasterizer raster, std::string& err)
 {
 	if(sdf_spread > 0)
 	{
@@ -331,9 +331,9 @@ bool font_atlas::build(font_rasterizer raster)
 	switch(raster)
 	{
 		case font_rasterizer::freetype:
-			return freetype::build(this);
+			return freetype::build(this, err);
 		case font_rasterizer::stb:
-			return stb::build(this);
+			return stb::build(this, err);
 	}
 
 	return is_built();
@@ -355,7 +355,7 @@ void font_atlas::finish()
 }
 
 void font_atlas::setup_font(font_info* font, font_config* font_config, float ascent, float descent,
-							float line_heigt)
+							float line_height)
 {
 	if(!font_config->merge_mode)
 	{
@@ -365,7 +365,7 @@ void font_atlas::setup_font(font_info* font, font_config* font_config, float asc
 		font->container_atlas = this;
 		font->ascent = ascent;
 		font->descent = descent;
-		font->line_height = line_heigt;
+		font->line_height = line_height;
 	}
 	font->config_data_count++;
 }
@@ -455,7 +455,6 @@ font_info* font_atlas::add_font_from_file_ttf(const char* filename, float size_p
 	void* data = file_load_to_memory(filename, "rb", &data_size, 0);
 	if(!data)
 	{
-		assert(0); // Could not load file.
 		return nullptr;
 	}
 	font_config font_cfg = font_cfg_template ? *font_cfg_template : font_config();
