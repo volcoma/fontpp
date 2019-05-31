@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <cstddef>
@@ -7,29 +8,13 @@
 #include <cstdlib>
 #include <cstring>
 #include <limits>
-#include <vector>
-#include <algorithm>
 #include <memory>
+#include <vector>
 
 namespace fnt
 {
 
-// 2D vector (often used to store positions, sizes, etc.)
-struct vec2
-{
-	float x, y;
-	vec2()
-	{
-		x = y = 0.0f;
-	}
-	vec2(float _x, float _y)
-	{
-		x = _x;
-		y = _y;
-	}
-};
-
-static inline uint32_t upper_power_of_two(uint32_t v)
+inline uint32_t upper_power_of_two(uint32_t v)
 {
 	v--;
 	v |= v >> 1;
@@ -41,28 +26,28 @@ static inline uint32_t upper_power_of_two(uint32_t v)
 	return v;
 }
 
-static inline uint32_t estimate_width(uint32_t max, uint32_t min, uint32_t surface_sqrt)
+inline uint32_t estimate_width(uint32_t max, uint32_t min, uint32_t surface_sqrt)
 {
-    if(max < min)
-    {
-        return max;
-    }
+	if(max < min)
+	{
+		return max;
+	}
 
-    uint32_t width = max;
-    while(width > min)
-    {
-        if(surface_sqrt >= width * 0.7f)
-        {
-            return width;
-        }
+	uint32_t width = max;
+	while(width > min)
+	{
+		if(surface_sqrt >= width * 0.7f)
+		{
+			return width;
+		}
 
-        width /= 2;
-    }
-    return width;
+		width /= 2;
+	}
+	return width;
 }
 
 template <typename T>
-static inline T clamp(T v, T mn, T mx)
+inline T clamp(T v, T mn, T mx)
 {
 	return (v < mn) ? mn : (v > mx) ? mx : v;
 }
