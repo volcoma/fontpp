@@ -150,21 +150,21 @@ void* file_load_to_memory(const char* filename, const char* file_open_mode, size
 int text_char_from_utf8(unsigned int* out_char, const char* in_text, const char* in_text_end)
 {
 	unsigned int c = (unsigned int)-1;
-	const uint8_t* str = (const uint8_t*)in_text;
+	auto str = reinterpret_cast<const uint8_t*>(in_text);
 	if(!(*str & 0x80))
 	{
-		c = (unsigned int)(*str++);
+		c = static_cast<unsigned int>(*str++);
 		*out_char = c;
 		return 1;
 	}
 	if((*str & 0xe0) == 0xc0)
 	{
 		*out_char = 0xFFFD; // will be invalid but not end of string
-		if(in_text_end && in_text_end - (const char*)str < 2)
+		if(in_text_end && in_text_end - reinterpret_cast<const char*>(str) < 2)
 			return 1;
 		if(*str < 0xc2)
 			return 2;
-		c = (unsigned int)((*str++ & 0x1f) << 6);
+		c = static_cast<unsigned int>((*str++ & 0x1f) << 6);
 		if((*str & 0xc0) != 0x80)
 			return 2;
 		c += (*str++ & 0x3f);
@@ -174,16 +174,16 @@ int text_char_from_utf8(unsigned int* out_char, const char* in_text, const char*
 	if((*str & 0xf0) == 0xe0)
 	{
 		*out_char = 0xFFFD; // will be invalid but not end of string
-		if(in_text_end && in_text_end - (const char*)str < 3)
+		if(in_text_end && in_text_end - reinterpret_cast<const char*>(str) < 3)
 			return 1;
 		if(*str == 0xe0 && (str[1] < 0xa0 || str[1] > 0xbf))
 			return 3;
 		if(*str == 0xed && str[1] > 0x9f)
 			return 3; // str[1] < 0x80 is checked below
-		c = (unsigned int)((*str++ & 0x0f) << 12);
+		c = static_cast<unsigned int>((*str++ & 0x0f) << 12);
 		if((*str & 0xc0) != 0x80)
 			return 3;
-		c += (unsigned int)((*str++ & 0x3f) << 6);
+		c += static_cast<unsigned int>((*str++ & 0x3f) << 6);
 		if((*str & 0xc0) != 0x80)
 			return 3;
 		c += (*str++ & 0x3f);
@@ -193,7 +193,7 @@ int text_char_from_utf8(unsigned int* out_char, const char* in_text, const char*
 	if((*str & 0xf8) == 0xf0)
 	{
 		*out_char = 0xFFFD; // will be invalid but not end of string
-		if(in_text_end && in_text_end - (const char*)str < 4)
+		if(in_text_end && in_text_end - reinterpret_cast<const char*>(str) < 4)
 			return 1;
 		if(*str > 0xf4)
 			return 4;
@@ -201,13 +201,13 @@ int text_char_from_utf8(unsigned int* out_char, const char* in_text, const char*
 			return 4;
 		if(*str == 0xf4 && str[1] > 0x8f)
 			return 4; // str[1] < 0x80 is checked below
-		c = (unsigned int)((*str++ & 0x07) << 18);
+		c = static_cast<unsigned int>((*str++ & 0x07) << 18);
 		if((*str & 0xc0) != 0x80)
 			return 4;
-		c += (unsigned int)((*str++ & 0x3f) << 12);
+		c += static_cast<unsigned int>((*str++ & 0x3f) << 12);
 		if((*str & 0xc0) != 0x80)
 			return 4;
-		c += (unsigned int)((*str++ & 0x3f) << 6);
+		c += static_cast<unsigned int>((*str++ & 0x3f) << 6);
 		if((*str & 0xc0) != 0x80)
 			return 4;
 		c += (*str++ & 0x3f);
@@ -493,7 +493,7 @@ font_info* font_atlas::add_font_from_memory_compressed_ttf(const void* compresse
 	font_config font_cfg = font_cfg_template ? *font_cfg_template : font_config();
 	assert(font_cfg.font_data == nullptr);
 	font_cfg.font_data_owned_by_atlas = true;
-	return add_font_from_memory_ttf(buf_decompressed_data, (int)buf_decompressed_size, size_pixels, &font_cfg,
+	return add_font_from_memory_ttf(buf_decompressed_data, size_t(buf_decompressed_size), size_pixels, &font_cfg,
 									glyph_ranges);
 }
 
@@ -553,9 +553,9 @@ const font_wchar* get_glyph_ranges_chinese_full()
 }
 
 static void unpack_accumulative_offsets_into_ranges(int base_codepoint, const short* accumulative_offsets,
-													int accumulative_offsets_count, font_wchar* out_ranges)
+													size_t accumulative_offsets_count, font_wchar* out_ranges)
 {
-	for(int n = 0; n < accumulative_offsets_count; n++, out_ranges += 2)
+	for(size_t n = 0; n < accumulative_offsets_count; n++, out_ranges += 2)
 	{
 		out_ranges[0] = out_ranges[1] = font_wchar(base_codepoint + accumulative_offsets[n]);
 		base_codepoint += accumulative_offsets[n];
@@ -1252,7 +1252,7 @@ static const char* get_default_compressed_font_data_ttf_base85()
 
 static unsigned int stb_decompress_length(const uint8_t* input)
 {
-	return (input[8] << 24) + (input[9] << 16) + (input[10] << 8) + input[11];
+	return static_cast<unsigned int>((input[8] << 24) + (input[9] << 16) + (input[10] << 8) + input[11]);
 }
 
 static uint8_t *stb__barrier_out_e, *stb__barrier_out_b;

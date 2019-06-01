@@ -7,7 +7,9 @@ int main()
 
     fnt::font_atlas atlas{};
     atlas.add_font_default();
-    atlas.build(fnt::font_rasterizer::freetype);
+
+    std::string err{};
+    atlas.build(fnt::font_rasterizer::stb, err);
 
     uint32_t w{};
     uint32_t h{};
