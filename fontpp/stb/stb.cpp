@@ -339,16 +339,16 @@ bool build(font_atlas* atlas, std::string& err)
         const float ascent = std::floor(unscaled_ascent * font_scale + ((unscaled_ascent > 0.0f) ? +1 : -1));
         const float descent =
             std::floor(unscaled_descent * font_scale + ((unscaled_descent > 0.0f) ? +1 : -1));
-        const float line_height = (unscaled_ascent - unscaled_descent + unscaled_line_gap) * font_scale;
+        const float line_height = (ascent - descent) + unscaled_line_gap * font_scale;
         atlas->setup_font(dst_font, &cfg, ascent, descent, line_height);
         const float font_off_x = cfg.glyph_offset_x;
-        const float font_off_y = cfg.glyph_offset_y; // + (float)(int)(dst_font->ascent + 0.5f);
+        const float font_off_y = cfg.glyph_offset_y;
         const auto sdf_spread = atlas->sdf_spread;
 
         for(int glyph_i = 0; glyph_i < src_tmp.glyphs_count; glyph_i++)
         {
             const int codepoint = src_tmp.glyphs_list[size_t(glyph_i)];
-            const stbtt_packedchar& pc = src_tmp.packed_chars[size_t(glyph_i)];
+            const auto& pc = src_tmp.packed_chars[size_t(glyph_i)];
 
             const float char_advance_x_org = pc.xadvance;
             const float char_advance_x_mod =
