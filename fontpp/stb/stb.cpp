@@ -1,5 +1,6 @@
 #include "stb.h"
 #include "../font.h"
+#include <limits>
 
 #define STB_RECT_PACK_IMPLEMENTATION
 #include "stb_rectpack.h"
@@ -118,9 +119,9 @@ bool build(font_atlas* atlas, std::string& err)
             return false;
 
         // Initialize helper structure for font loading and verify that the TTF/OTF data is correct
-        const int font_offset = stbtt_GetFontOffsetForIndex((uint8_t*)cfg.font_data, cfg.font_no);
+        const int font_offset = stbtt_GetFontOffsetForIndex(reinterpret_cast<const uint8_t*>(cfg.font_data), cfg.font_no);
         assert(font_offset >= 0 && "FontData is incorrect, or FontNo cannot be found.");
-        if(!stbtt_InitFont(&src_tmp.font_info, (uint8_t*)cfg.font_data, font_offset))
+        if(!stbtt_InitFont(&src_tmp.font_info, reinterpret_cast<const uint8_t*>(cfg.font_data), font_offset))
             return false;
 
         // Measure highest codepoints
@@ -211,7 +212,7 @@ bool build(font_atlas* atlas, std::string& err)
         const float scale = (cfg.size_pixels > 0)
                                 ? stbtt_ScaleForPixelHeight(&src_tmp.font_info, cfg.size_pixels)
                                 : stbtt_ScaleForMappingEmToPixels(&src_tmp.font_info, -cfg.size_pixels);
-        const int padding = int(atlas->tex_glyph_padding);
+        const auto padding = int(atlas->tex_glyph_padding);
         for(size_t glyph_i = 0; glyph_i < src_tmp.glyphs_list.size(); glyph_i++)
         {
             int x0, y0, x1, y1;
@@ -354,9 +355,9 @@ bool build(font_atlas* atlas, std::string& err)
             const float char_advance_x_mod =
                 clamp(char_advance_x_org, cfg.glyph_min_advance_x, cfg.glyph_max_advance_x);
             float char_off_x = font_off_x;
-            if(char_advance_x_org != char_advance_x_mod)
+            if(fabs(char_advance_x_org - char_advance_x_mod) > std::numeric_limits<float>::epsilon())
                 char_off_x += cfg.pixel_snap_h
-                                  ? (float)(int)((char_advance_x_mod - char_advance_x_org) * 0.5f)
+                                  ? static_cast<float>(static_cast<int>((char_advance_x_mod - char_advance_x_org) * 0.5f))
                                   : (char_advance_x_mod - char_advance_x_org) * 0.5f;
 
             // Register glyph

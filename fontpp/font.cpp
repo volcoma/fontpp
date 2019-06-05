@@ -149,7 +149,7 @@ void* file_load_to_memory(const char* filename, const char* file_open_mode, size
 // We handle UTF-8 decoding error by skipping forward.
 int text_char_from_utf8(unsigned int* out_char, const char* in_text, const char* in_text_end)
 {
-	unsigned int c = (unsigned int)-1;
+	auto c = static_cast<unsigned int>(-1);
 	auto str = reinterpret_cast<const uint8_t*>(in_text);
 	if(!(*str & 0x80))
 	{
@@ -396,7 +396,10 @@ font_info* font_atlas::add_font(const font_config* font_cfg)
 	{
 		new_font_cfg.font_data = std::malloc(new_font_cfg.font_data_size);
 		new_font_cfg.font_data_owned_by_atlas = true;
-		memcpy(new_font_cfg.font_data, font_cfg->font_data, new_font_cfg.font_data_size);
+        if(new_font_cfg.font_data && font_cfg->font_data)
+        {
+            std::memcpy(new_font_cfg.font_data, font_cfg->font_data, new_font_cfg.font_data_size);
+        }
 	}
 
 	// Invalidate texture
@@ -409,9 +412,9 @@ font_info* font_atlas::add_font(const font_config* font_cfg)
 static unsigned int stb_decompress_length(const uint8_t* input);
 static unsigned int stb_decompress(uint8_t* output, const uint8_t* input, unsigned int length);
 static const char* get_default_compressed_font_data_ttf_base85();
-static unsigned int decode85_byte(char c)
+static unsigned int decode85_byte(uint8_t c)
 {
-	return c >= '\\' ? c - 36 : c - 35;
+	return c >= '\\' ? static_cast<unsigned int>(c) - 36 : static_cast<unsigned int>(c) - 35;
 }
 static void decode85(const uint8_t* src, uint8_t* dst)
 {
@@ -485,10 +488,10 @@ font_info* font_atlas::add_font_from_memory_compressed_ttf(const void* compresse
 														   const font_config* font_cfg_template,
 														   const font_wchar* glyph_ranges)
 {
-	const unsigned int buf_decompressed_size = stb_decompress_length((const uint8_t*)compressed_ttf_data);
-	uint8_t* buf_decompressed_data = (uint8_t*)std::malloc(buf_decompressed_size);
-	stb_decompress(buf_decompressed_data, (const uint8_t*)compressed_ttf_data,
-				   (unsigned int)compressed_ttf_size);
+	const unsigned int buf_decompressed_size = stb_decompress_length(reinterpret_cast<const uint8_t*>(compressed_ttf_data));
+	auto buf_decompressed_data = reinterpret_cast<uint8_t*>(std::malloc(buf_decompressed_size));
+	stb_decompress(buf_decompressed_data, reinterpret_cast<const uint8_t*>(compressed_ttf_data),
+				   static_cast<unsigned int>(compressed_ttf_size));
 
 	font_config font_cfg = font_cfg_template ? *font_cfg_template : font_config();
 	assert(font_cfg.font_data == nullptr);
@@ -503,8 +506,8 @@ font_info* font_atlas::add_font_from_memory_compressed_base85_ttf(const char* co
 																  const font_wchar* glyph_ranges)
 {
 	size_t compressed_ttf_size = ((strlen(compressed_ttf_data_base85) + 4) / 5) * 4;
-	void* compressed_ttf = std::malloc((size_t)compressed_ttf_size);
-	decode85((const uint8_t*)compressed_ttf_data_base85, (uint8_t*)compressed_ttf);
+	void* compressed_ttf = std::malloc(compressed_ttf_size);
+	decode85(reinterpret_cast<const uint8_t*>(compressed_ttf_data_base85), reinterpret_cast<uint8_t*>(compressed_ttf));
 	font_info* font = add_font_from_memory_compressed_ttf(compressed_ttf, compressed_ttf_size, size_pixels,
 														  font_cfg, glyph_ranges);
 	std::free(compressed_ttf);
@@ -1000,12 +1003,12 @@ void font_info::add_glyph(font_wchar codepoint, float x0, float y0, float x1, fl
 	glyph.advance_x = advance_x + config_data->glyph_extra_spacing_x; // Bake spacing into AdvanceX
 
 	if(config_data->pixel_snap_h)
-		glyph.advance_x = (float)(int)(glyph.advance_x + 0.5f);
+		glyph.advance_x = static_cast<float>(static_cast<int>(glyph.advance_x + 0.5f));
 
 	// Compute rough surface usage metrics (+1 to account for average padding, +0.99 to round)
 	dirty_lookup_tables = true;
-	metrics_total_surface += (int)((glyph.u1 - glyph.u0) * container_atlas->tex_width + 1.99f) *
-							 (int)((glyph.v1 - glyph.v0) * container_atlas->tex_height + 1.99f);
+	metrics_total_surface += static_cast<int>((glyph.u1 - glyph.u0) * container_atlas->tex_width + 1.99f) *
+							 static_cast<int>((glyph.v1 - glyph.v0) * container_atlas->tex_height + 1.99f);
 }
 
 void font_info::add_remap_char(font_wchar dst, font_wchar src, bool overwrite_dst)

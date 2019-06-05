@@ -18,6 +18,7 @@ set_target_properties(${target_name} PROPERTIES
 
 if(MSVC)
 	target_compile_options(${target_name} PRIVATE /wd4505)
+	target_compile_definitions(${target_name} PRIVATE  _CRT_SECURE_NO_WARNINGS)
 else()
 	target_compile_options(${target_name} PRIVATE -Wno-unused-function -Wno-old-style-cast)
 endif()

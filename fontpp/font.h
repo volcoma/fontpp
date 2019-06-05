@@ -19,7 +19,7 @@ struct font_glyph;
 struct font_glyph_ranges_builder;
 // A single U16 character for keyboard input/display.
 // We encode them as multi bytes UTF-8 when used in strings.
-using font_wchar = wchar_t;
+using font_wchar = uint16_t;
 
 enum class font_rasterizer
 {
@@ -173,6 +173,8 @@ const font_wchar* get_glyph_ranges_cyrillic();
 const font_wchar* get_glyph_ranges_thai();
 // Default + Vietname characters
 const font_wchar* get_glyph_ranges_vietnamese();
+
+int text_char_from_utf8(unsigned int* out_char, const char* in_text, const char* in_text_end);
 
 // Load and rasterize multiple TTF/OTF fonts into a same texture. The font atlas will build a single texture
 // holding:
