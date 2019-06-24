@@ -19,7 +19,17 @@ struct font_glyph_ranges_builder;
 // A single U16 character for keyboard input/display.
 // We encode them as multi bytes UTF-8 when used in strings.
 using font_wchar = uint16_t;
-using kerning_table = std::vector<std::vector<float>>;
+
+struct pair_hash
+{
+    size_t operator()(const std::pair<font_wchar, font_wchar>& pair) const
+    {
+        return std::hash<font_wchar>()(pair.first) ^ std::hash<font_wchar>()(pair.second);
+    }
+};
+
+using kerning_table = std::unordered_map<std::pair<font_wchar, font_wchar>, float, pair_hash>;
+
 
 enum class font_rasterizer
 {

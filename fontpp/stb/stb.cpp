@@ -407,18 +407,7 @@ bool build(font_atlas* atlas, std::string& err)
                         auto cp_to = size_t(codepoint);
 
                         auto kern_value = float(kerning) * font_scale;
-
-                        if(dst_font->kernings.size() <= cp_from)
-                        {
-                            dst_font->kernings.resize(cp_from + 1);
-                        }
-                        auto& codepoint_kernigns = dst_font->kernings[cp_from];
-
-                        if(codepoint_kernigns.size() <= cp_to)
-                        {
-                            codepoint_kernigns.resize(cp_to + 1);
-                        }
-                        codepoint_kernigns[cp_to] = kern_value;
+                        dst_font->kernings[{cp_from, cp_to}] = kern_value;
                     }
                 }
             }
@@ -427,7 +416,6 @@ bool build(font_atlas* atlas, std::string& err)
                                 y1 + font_off_y, u0, v0, u1, v1, char_advance_x_mod);
 
         }
-        dst_font->kernings.shrink_to_fit();
     }
 
     atlas->finish();
