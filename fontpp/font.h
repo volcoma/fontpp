@@ -1,6 +1,5 @@
 #pragma once
 #include "utils.h"
-
 namespace fnt
 {
 
@@ -20,6 +19,7 @@ struct font_glyph_ranges_builder;
 // A single U16 character for keyboard input/display.
 // We encode them as multi bytes UTF-8 when used in strings.
 using font_wchar = uint16_t;
+using kerning_table = std::vector<std::vector<float>>;
 
 enum class font_rasterizer
 {
@@ -190,7 +190,8 @@ int text_char_from_utf8(unsigned int* out_char, const char* in_text, const char*
 //   atlas is build (when calling build()). We only copy the pointer, not the data.
 // - Important: By default, AddFontFromMemoryTTF() takes ownership of the data. Even though we are not writing
 // to it, we will free the pointer on destruction.
-//   You can set font_cfg->font_data_owned_by_atlas=false to keep ownership of your data and it won't be freed,
+//   You can set font_cfg->font_data_owned_by_atlas=false to keep ownership of your data and it won't be
+//   freed,
 // - Even though many functions are suffixed with "TTF", OTF data is supported just as well.
 // - This is an old API and it is currently awkward for those and and various other reasons! We will address
 // them in the future!
@@ -291,6 +292,8 @@ struct font_atlas
 // Font runtime data and rendering
 struct font_info
 {
+	kerning_table kernings{};
+
 	// Sparse. glyphs->AdvanceX in a directly
 	std::vector<float> index_advance_x{}; // out
 
@@ -328,10 +331,6 @@ struct font_info
 	float ascent{};  // out
 	float descent{}; // out
 	float line_height{};
-
-    float loaded_glyphs_ascent{};  // out
-	float loaded_glyphs_descent{}; // out
-    float loaded_glyphs_line_height{}; // out
 
 	// Total surface in pixels to get an idea of the
 	// font rasterization/texture cost (not exact, we approximate the cost of padding

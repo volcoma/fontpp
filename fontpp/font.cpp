@@ -330,13 +330,13 @@ bool font_atlas::build(font_rasterizer raster, std::string& err)
 
 	switch(raster)
 	{
-//		case font_rasterizer::freetype:
-//			return freetype::build(this, err);
+			//		case font_rasterizer::freetype:
+			//			return freetype::build(this, err);
 		case font_rasterizer::stb:
 			return stb::build(this, err);
-        default:
-            err = "unsupported font rasterizer";
-        break;
+		default:
+			err = "unsupported font rasterizer";
+			break;
 	}
 
 	return is_built();
@@ -396,10 +396,10 @@ font_info* font_atlas::add_font(const font_config* font_cfg)
 	{
 		new_font_cfg.font_data = std::malloc(new_font_cfg.font_data_size);
 		new_font_cfg.font_data_owned_by_atlas = true;
-        if(new_font_cfg.font_data && font_cfg->font_data)
-        {
-            std::memcpy(new_font_cfg.font_data, font_cfg->font_data, new_font_cfg.font_data_size);
-        }
+		if(new_font_cfg.font_data && font_cfg->font_data)
+		{
+			std::memcpy(new_font_cfg.font_data, font_cfg->font_data, new_font_cfg.font_data_size);
+		}
 	}
 
 	// Invalidate texture
@@ -488,7 +488,8 @@ font_info* font_atlas::add_font_from_memory_compressed_ttf(const void* compresse
 														   const font_config* font_cfg_template,
 														   const font_wchar* glyph_ranges)
 {
-	const unsigned int buf_decompressed_size = stb_decompress_length(reinterpret_cast<const uint8_t*>(compressed_ttf_data));
+	const unsigned int buf_decompressed_size =
+		stb_decompress_length(reinterpret_cast<const uint8_t*>(compressed_ttf_data));
 	auto buf_decompressed_data = reinterpret_cast<uint8_t*>(std::malloc(buf_decompressed_size));
 	stb_decompress(buf_decompressed_data, reinterpret_cast<const uint8_t*>(compressed_ttf_data),
 				   static_cast<unsigned int>(compressed_ttf_size));
@@ -496,8 +497,8 @@ font_info* font_atlas::add_font_from_memory_compressed_ttf(const void* compresse
 	font_config font_cfg = font_cfg_template ? *font_cfg_template : font_config();
 	assert(font_cfg.font_data == nullptr);
 	font_cfg.font_data_owned_by_atlas = true;
-	return add_font_from_memory_ttf(buf_decompressed_data, size_t(buf_decompressed_size), size_pixels, &font_cfg,
-									glyph_ranges);
+	return add_font_from_memory_ttf(buf_decompressed_data, size_t(buf_decompressed_size), size_pixels,
+									&font_cfg, glyph_ranges);
 }
 
 font_info* font_atlas::add_font_from_memory_compressed_base85_ttf(const char* compressed_ttf_data_base85,
@@ -507,7 +508,8 @@ font_info* font_atlas::add_font_from_memory_compressed_base85_ttf(const char* co
 {
 	size_t compressed_ttf_size = ((strlen(compressed_ttf_data_base85) + 4) / 5) * 4;
 	void* compressed_ttf = std::malloc(compressed_ttf_size);
-	decode85(reinterpret_cast<const uint8_t*>(compressed_ttf_data_base85), reinterpret_cast<uint8_t*>(compressed_ttf));
+	decode85(reinterpret_cast<const uint8_t*>(compressed_ttf_data_base85),
+			 reinterpret_cast<uint8_t*>(compressed_ttf));
 	font_info* font = add_font_from_memory_compressed_ttf(compressed_ttf, compressed_ttf_size, size_pixels,
 														  font_cfg, glyph_ranges);
 	std::free(compressed_ttf);

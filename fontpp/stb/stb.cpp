@@ -345,6 +345,7 @@ bool build(font_atlas* atlas, std::string& err)
         const float font_off_x = cfg.glyph_offset_x;
         const float font_off_y = cfg.glyph_offset_y;
         const auto sdf_spread = atlas->sdf_spread;
+        bool has_kerning_table = src_tmp.font_info.kern || src_tmp.font_info.gpos;
 
         for(int glyph_i = 0; glyph_i < src_tmp.glyphs_count; glyph_i++)
         {
@@ -393,9 +394,40 @@ bool build(font_atlas* atlas, std::string& err)
             auto x1 = q.x1 + sdf_shift_x;
             auto y1 = q.y1 + sdf_shift_y;
 
+            // if no kerning table, don't waste time looking
+            if (has_kerning_table)
+            {
+                for(int glyph_j = 0; glyph_j < src_tmp.glyphs_count; glyph_j++)
+                {
+                    const int codepoint_from = src_tmp.glyphs_list[size_t(glyph_j)];
+                    auto kerning = stbtt_GetCodepointKernAdvance(&src_tmp.font_info, codepoint_from, codepoint);
+                    if( kerning )
+                    {
+                        auto cp_from = size_t(codepoint_from);
+                        auto cp_to = size_t(codepoint);
+
+                        auto kern_value = float(kerning) * font_scale;
+
+                        if(dst_font->kernings.size() <= cp_from)
+                        {
+                            dst_font->kernings.resize(cp_from + 1);
+                        }
+                        auto& codepoint_kernigns = dst_font->kernings[cp_from];
+
+                        if(codepoint_kernigns.size() <= cp_to)
+                        {
+                            codepoint_kernigns.resize(cp_to + 1);
+                        }
+                        codepoint_kernigns[cp_to] = kern_value;
+                    }
+                }
+            }
+
             dst_font->add_glyph(font_wchar(codepoint), x0 + char_off_x, y0 + font_off_y, x1 + char_off_x,
                                 y1 + font_off_y, u0, v0, u1, v1, char_advance_x_mod);
+
         }
+        dst_font->kernings.shrink_to_fit();
     }
 
     atlas->finish();
