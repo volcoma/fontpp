@@ -85,6 +85,9 @@ struct font_config
 	/// make them more readable.
 	float rasterizer_multiply{1.0f};
 
+    /// Load kerning table if available
+    bool kerning{};
+
 	/// [Internal]
 	font_info* dst_font{};
 };

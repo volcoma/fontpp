@@ -395,7 +395,7 @@ bool build(font_atlas* atlas, std::string& err)
             auto y1 = q.y1 + sdf_shift_y;
 
             // if no kerning table, don't waste time looking
-            if (has_kerning_table)
+            if (cfg.kerning && has_kerning_table)
             {
                 for(int glyph_j = 0; glyph_j < src_tmp.glyphs_count; glyph_j++)
                 {
