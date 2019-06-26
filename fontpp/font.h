@@ -85,8 +85,8 @@ struct font_config
 	/// make them more readable.
 	float rasterizer_multiply{1.0f};
 
-    /// Load kerning table if available
-    bool kerning{};
+    /// Load kerning table if requested glyphs are below this value
+    uint32_t kerning_glyphs_limit{};
 
 	/// [Internal]
 	font_info* dst_font{};
