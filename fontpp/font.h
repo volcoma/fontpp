@@ -24,7 +24,8 @@ struct pair_hash
 {
 	size_t operator()(const std::pair<font_wchar, font_wchar>& pair) const
 	{
-		return uint32_t(pair.first) << 16 | uint32_t(pair.second);
+        static_assert(sizeof(std::size_t)>= (sizeof(font_wchar) * 2), "Ensure that std::size_t, the type of the hash, is large enough");
+		return uint32_t(pair.first) << (sizeof(font_wchar) * 8) | uint32_t(pair.second);
 	}
 };
 
