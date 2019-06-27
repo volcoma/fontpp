@@ -9,9 +9,9 @@
 #include <cstring>
 #include <limits>
 #include <memory>
-#include <vector>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace fnt
 {

@@ -22,14 +22,13 @@ using font_wchar = uint16_t;
 
 struct pair_hash
 {
-    size_t operator()(const std::pair<font_wchar, font_wchar>& pair) const
-    {
-        return std::hash<font_wchar>()(pair.first) ^ std::hash<font_wchar>()(pair.second);
-    }
+	size_t operator()(const std::pair<font_wchar, font_wchar>& pair) const
+	{
+		return uint32_t(pair.first) << 16 | uint32_t(pair.second);
+	}
 };
 
 using kerning_table = std::unordered_map<std::pair<font_wchar, font_wchar>, float, pair_hash>;
-
 
 enum class font_rasterizer
 {
@@ -85,8 +84,8 @@ struct font_config
 	/// make them more readable.
 	float rasterizer_multiply{1.0f};
 
-    /// Load kerning table if requested glyphs are below this value
-    uint32_t kerning_glyphs_limit{};
+	/// Load kerning table if requested glyphs are below this value
+	uint32_t kerning_glyphs_limit{};
 
 	/// [Internal]
 	font_info* dst_font{};

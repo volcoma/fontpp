@@ -2557,10 +2557,10 @@ STBTT_DEF int  stbtt_GetGlyphKernAdvance(const stbtt_fontinfo *info, int g1, int
 {
    int xAdvance = 0;
 
-   if (info->gpos)
+   if (xAdvance == 0 && info->gpos)
       xAdvance += stbtt__GetGlyphGPOSInfoAdvance(info, g1, g2);
 
-   if (info->kern)
+   if (xAdvance == 0 && info->kern)
       xAdvance += stbtt__GetGlyphKernInfoAdvance(info, g1, g2);
 
    return xAdvance;
