@@ -4,6 +4,13 @@ set(target_name fontpp)
 
 add_library(${target_name} ${libsrc})
 
+find_package(Freetype)
+if(FREETYPE_FOUND)
+	target_compile_definitions(${target_name} PRIVATE HAS_FREETYPE)
+	target_link_libraries(${target_name} PRIVATE ${FREETYPE_LIBRARIES})
+	target_include_directories(${target_name} PRIVATE ${FREETYPE_INCLUDE_DIRS})
+endif()
+
 target_include_directories(${target_name}
     PUBLIC
 		${CMAKE_CURRENT_SOURCE_DIR}/..

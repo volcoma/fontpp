@@ -338,10 +338,21 @@ bool build(font_atlas* atlas, std::string& err)
 		int unscaled_ascent, unscaled_descent, unscaled_line_gap;
 		stbtt_GetFontVMetrics(&src_tmp.font_info, &unscaled_ascent, &unscaled_descent, &unscaled_line_gap);
 
-		const float ascent = std::floor(unscaled_ascent * font_scale + ((unscaled_ascent > 0.0f) ? +1 : -1));
-		const float descent =
-			std::floor(unscaled_descent * font_scale + ((unscaled_descent > 0.0f) ? +1 : -1));
-		const float line_height = (ascent - descent) + unscaled_line_gap * font_scale;
+		//const float ascent = std::floor(unscaled_ascent * font_scale + ((unscaled_ascent > 0.0f) ? +1 : -1));
+		//const float descent =
+		//	std::floor(unscaled_descent * font_scale + ((unscaled_descent > 0.0f) ? +1 : -1));
+        //
+        //const float line_gap = std::floor(unscaled_line_gap * font_scale);
+        float fh = unscaled_ascent - unscaled_descent;
+        float ascent = unscaled_ascent / fh;
+        float descent = unscaled_descent / fh;
+        float line_gap = unscaled_line_gap / fh;
+
+        ascent = std::ceil(ascent * cfg.size_pixels);
+        descent = std::ceil(descent * cfg.size_pixels);
+        line_gap = std::ceil(line_gap * cfg.size_pixels);
+
+		const float line_height = (ascent - descent + line_gap);
 		atlas->setup_font(dst_font, &cfg, ascent, descent, line_height);
 		const float font_off_x = cfg.glyph_offset_x;
 		const float font_off_y = cfg.glyph_offset_y;

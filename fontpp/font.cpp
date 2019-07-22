@@ -1,5 +1,5 @@
 #include "font.h"
-//#include "freetype/freetype.h"
+#include "freetype/freetype.h"
 #include "stb/stb.h"
 
 #define COL32_R_SHIFT 0
@@ -330,8 +330,8 @@ bool font_atlas::build(font_rasterizer raster, std::string& err)
 
 	switch(raster)
 	{
-			//		case font_rasterizer::freetype:
-			//			return freetype::build(this, err);
+		case font_rasterizer::freetype:
+			return freetype::build(this, err);
 		case font_rasterizer::stb:
 			return stb::build(this, err);
 		default:
