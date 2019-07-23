@@ -170,7 +170,6 @@ bool font_ft::init(FT_Library ft_library, const font_config& cfg, unsigned int e
     error = FT_Select_Charmap(face, FT_ENCODING_UNICODE);
     if(error != 0)
         return false;
-
     info = {};
     set_pixel_height((uint32_t)cfg.size_pixels);
 
@@ -214,7 +213,6 @@ void font_ft::set_pixel_height(int pixel_height)
     // ascender and descender. Seems strange to me. NB: FT_Set_Pixel_Sizes() doesn't seem to get us the same
     // result.
 
-    //FT_Set_Pixel_Sizes(face, 0, pixel_height);
     FT_Size_RequestRec req;
     req.type = FT_SIZE_REQUEST_TYPE_REAL_DIM;
     req.width = 0;
@@ -534,7 +532,7 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
             auto& src_glyph = src_tmp.glyphs_list[glyph_i];
 
             const FT_Glyph_Metrics* metrics = src_tmp.font.load_glyph(src_glyph.codepoint);
-            assert(metrics != nullptr);
+            //assert(metrics != nullptr);
             if(metrics == nullptr)
                 continue;
 
@@ -609,6 +607,14 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
         return false;
     }
 
+    if(atlas->tex_height > tex_max)
+    {
+        err = "Required [" + std::to_string(atlas->tex_height) +
+              "] size is too big. Consider creating the font with a lower size and "
+              "upscaling it when displaying.";
+        return false;
+    }
+
     atlas->tex_pixels_alpha8.resize(atlas->tex_width * atlas->tex_height, 0);
     // 8. Copy rasterized font characters back into the main texture
     // 9. Setup ImFont and glyphs for runtime
@@ -652,8 +658,9 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
                 return false;
             }
             auto& info = src_glyph.info;
-            assert(info.width + padding <= pack_rect.w);
-            assert(info.height + padding <= pack_rect.h);
+
+            //assert(info.width + padding <= pack_rect.w);
+            //assert(info.height + padding <= pack_rect.h);
             const int tx = pack_rect.x + padding;
             const int ty = pack_rect.y + padding;
 

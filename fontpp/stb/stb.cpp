@@ -406,25 +406,24 @@ bool build(font_atlas* atlas, std::string& err)
 			auto x1 = q.x1 + sdf_shift_x;
 			auto y1 = q.y1 + sdf_shift_y;
 
-			// if no kerning table, don't waste time looking
-			if(has_kerning_table && cfg.kerning_glyphs_limit > uint32_t(src_tmp.glyphs_count))
-			{
-				for(int glyph_j = 0; glyph_j < src_tmp.glyphs_count; glyph_j++)
-				{
-					const int codepoint_from = src_tmp.glyphs_list[size_t(glyph_j)];
-					auto kerning =
-						stbtt_GetCodepointKernAdvance(&src_tmp.font_info, codepoint_from, codepoint);
-                    auto kern_value = int(float(kerning) * font_scale);
+            // if no kerning table, don't waste time looking
+            if (has_kerning_table && cfg.kerning_glyphs_limit > uint32_t(src_tmp.glyphs_count))
+            {
+                for(int glyph_j = 0; glyph_j < src_tmp.glyphs_count; glyph_j++)
+                {
+                    const int codepoint_from = src_tmp.glyphs_list[size_t(glyph_j)];
+                    auto kerning = stbtt_GetCodepointKernAdvance(&src_tmp.font_info, codepoint_from, codepoint);
+                    if( kerning )
+                    {
+                        auto cp_from = size_t(codepoint_from);
+                        auto cp_to = size_t(codepoint);
 
-					if(kern_value)
-					{
-						auto cp_from = font_wchar(codepoint_from);
-						auto cp_to = font_wchar(codepoint);
+                        auto kern_value = float(kerning) * font_scale;
+                        dst_font->kernings[{cp_from, cp_to}] = kern_value;
+                    }
+                }
+            }
 
-						dst_font->kernings[{cp_from, cp_to}] = kern_value;
-					}
-				}
-			}
 
 			dst_font->add_glyph(font_wchar(codepoint), x0 + char_off_x, y0 + font_off_y, x1 + char_off_x,
 								y1 + font_off_y, u0, v0, u1, v1, char_advance_x_mod);
