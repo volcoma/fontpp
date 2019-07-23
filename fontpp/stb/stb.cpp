@@ -9,6 +9,7 @@
 #define STBTT_STATIC
 #include "stb_truetype.h"
 
+#include <iostream>
 namespace fnt
 {
 namespace stb
@@ -337,22 +338,21 @@ bool build(font_atlas* atlas, std::string& err)
 		const float font_scale = stbtt_ScaleForPixelHeight(&src_tmp.font_info, cfg.size_pixels);
 		int unscaled_ascent, unscaled_descent, unscaled_line_gap;
 		stbtt_GetFontVMetrics(&src_tmp.font_info, &unscaled_ascent, &unscaled_descent, &unscaled_line_gap);
+        std::cout << "------------------------------" << std::endl;
+        std::cout << "unscaled_ascent = " << unscaled_ascent << std::endl;
+        std::cout << "unscaled_descent = " << unscaled_descent << std::endl;
 
-		//const float ascent = std::floor(unscaled_ascent * font_scale + ((unscaled_ascent > 0.0f) ? +1 : -1));
-		//const float descent =
-		//	std::floor(unscaled_descent * font_scale + ((unscaled_descent > 0.0f) ? +1 : -1));
-        //
-        //const float line_gap = std::floor(unscaled_line_gap * font_scale);
-        float fh = unscaled_ascent - unscaled_descent;
-        float ascent = unscaled_ascent / fh;
-        float descent = unscaled_descent / fh;
-        float line_gap = unscaled_line_gap / fh;
+		const float ascent = std::floor(unscaled_ascent * font_scale);
+		const float descent = std::floor(unscaled_descent * font_scale);
+        const float line_gap = std::floor(unscaled_line_gap * font_scale);
+		const float line_height = (ascent - descent) + line_gap;
 
-        ascent = std::ceil(ascent * cfg.size_pixels);
-        descent = std::ceil(descent * cfg.size_pixels);
-        line_gap = std::ceil(line_gap * cfg.size_pixels);
+        std::cout << "------------------------------" << std::endl;
+        std::cout << "ascent = " << ascent << std::endl;
+        std::cout << "descent = " << descent << std::endl;
+        std::cout << "line_gap = " << line_gap << std::endl;
+        std::cout << "line_height = " << line_height << std::endl;
 
-		const float line_height = (ascent - descent + line_gap);
 		atlas->setup_font(dst_font, &cfg, ascent, descent, line_height);
 		const float font_off_x = cfg.glyph_offset_x;
 		const float font_off_y = cfg.glyph_offset_y;
@@ -414,12 +414,13 @@ bool build(font_atlas* atlas, std::string& err)
 					const int codepoint_from = src_tmp.glyphs_list[size_t(glyph_j)];
 					auto kerning =
 						stbtt_GetCodepointKernAdvance(&src_tmp.font_info, codepoint_from, codepoint);
-					if(kerning)
+                    auto kern_value = int(float(kerning) * font_scale);
+
+					if(kern_value)
 					{
 						auto cp_from = font_wchar(codepoint_from);
 						auto cp_to = font_wchar(codepoint);
 
-						auto kern_value = float(kerning) * font_scale;
 						dst_font->kernings[{cp_from, cp_to}] = kern_value;
 					}
 				}

@@ -22,6 +22,7 @@ if(BUILD_FONTPP_WITH_CODE_STYLE_CHECKS)
 	set(BUILD_WITH_CODE_STYLE_CHECKS ON)
 endif()
 
+add_subdirectory(3rdparty)
 add_subdirectory(fontpp)
 
 if(BUILD_FONTPP_TESTS)

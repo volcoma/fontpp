@@ -32,6 +32,7 @@
 #include "../font.h"
 
 #include <ft2build.h>
+#include <iostream>
 
 #include FT_FREETYPE_H  // <freetype/freetype.h>
 #include FT_GLYPH_H     // <freetype/ftglyph.h>
@@ -157,9 +158,9 @@ struct font_ft
     FT_Render_Mode render_mode{};
 };
 
-// From SDL_ttf: Handy routines for converting from fixed point
-//#define FT_CEIL(X) ((((X) + 63) & -64) / 64.0f)
-#define FT_CEIL(X) ((X) >>6)
+// Handy routines for converting from fixed point
+#define FT_CEIL(X) ((((X) + 63) & -64) / 64.0f)
+
 bool font_ft::init(FT_Library ft_library, const font_config& cfg, unsigned int extra_user_flags)
 {
     FT_Error error = FT_New_Memory_Face(ft_library, (uint8_t*)cfg.font_data, (uint32_t)cfg.font_data_size,
@@ -213,7 +214,7 @@ void font_ft::set_pixel_height(int pixel_height)
     // ascender and descender. Seems strange to me. NB: FT_Set_Pixel_Sizes() doesn't seem to get us the same
     // result.
 
-//    FT_Set_Pixel_Sizes(face, 0, pixel_height);
+    //FT_Set_Pixel_Sizes(face, 0, pixel_height);
     FT_Size_RequestRec req;
     req.type = FT_SIZE_REQUEST_TYPE_REAL_DIM;
     req.width = 0;
@@ -224,11 +225,16 @@ void font_ft::set_pixel_height(int pixel_height)
 
     // Update font info
     FT_Size_Metrics metrics = face->size->metrics;
+
+    std::cout << "------------------------------" << std::endl;
+    std::cout << "unscaled_ascent = " << metrics.ascender << std::endl;
+    std::cout << "unscaled_descent = " << metrics.descender << std::endl;
+
     info.pixel_height = uint32_t(pixel_height);
     info.ascender = FT_CEIL(metrics.ascender);
     info.descender = FT_CEIL(metrics.descender);
     info.line_spacing = FT_CEIL(metrics.height);
-    info.line_gap = (info.line_spacing - (info.ascender - info.descender));
+    info.line_gap = FT_CEIL(metrics.height - metrics.ascender + metrics.descender);
     info.max_advance_width = FT_CEIL(metrics.max_advance);
 }
 
@@ -528,7 +534,7 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
             auto& src_glyph = src_tmp.glyphs_list[glyph_i];
 
             const FT_Glyph_Metrics* metrics = src_tmp.font.load_glyph(src_glyph.codepoint);
-            //assert(metrics != nullptr);
+            assert(metrics != nullptr);
             if(metrics == nullptr)
                 continue;
 
@@ -620,12 +626,20 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
         const float ascent = src_tmp.font.info.ascender;
         const float descent = src_tmp.font.info.descender;
         const float line_gap = src_tmp.font.info.line_gap;
-
         const float line_height = (ascent - descent) + line_gap;
+
+        std::cout << "------------------------------" << std::endl;
+        std::cout << "ascent = " << ascent << std::endl;
+        std::cout << "descent = " << descent << std::endl;
+        std::cout << "line_gap = " << line_gap << std::endl;
+        std::cout << "line_height = " << line_height << std::endl;
+
+
         atlas->setup_font(dst_font, &cfg, ascent, descent, line_height);
         const float font_off_x = cfg.glyph_offset_x;
         const float font_off_y = cfg.glyph_offset_y; // + (float)(int)(dst_font->ascent + 0.5f);
         const auto sdf_spread = atlas->sdf_spread;
+        bool has_kerning_table = FT_HAS_KERNING(src_tmp.font.face);
 
         const auto padding = int(atlas->tex_glyph_padding);
         for(int glyph_i = 0; glyph_i < src_tmp.glyphs_count; glyph_i++)
@@ -638,8 +652,8 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
                 return false;
             }
             auto& info = src_glyph.info;
-            //assert(info.width + padding <= pack_rect.w);
-            //assert(info.height + padding <= pack_rect.h);
+            assert(info.width + padding <= pack_rect.w);
+            assert(info.height + padding <= pack_rect.h);
             const int tx = pack_rect.x + padding;
             const int ty = pack_rect.y + padding;
 
@@ -695,6 +709,27 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
             auto y0 = ft_y0 - sdf_shift_y;
             auto x1 = ft_x1 + sdf_shift_x;
             auto y1 = ft_y1 + sdf_shift_y;
+
+            // if no kerning table, don't waste time looking
+			if(has_kerning_table && cfg.kerning_glyphs_limit > uint32_t(src_tmp.glyphs_count))
+			{
+                const auto codepoint = src_glyph.codepoint;
+				for(int glyph_j = 0; glyph_j < src_tmp.glyphs_count; glyph_j++)
+				{
+					const auto codepoint_from = src_tmp.glyphs_list[size_t(glyph_j)].codepoint;
+                    FT_Vector kerning{};
+                    FT_Get_Kerning(src_tmp.font.face, codepoint_from, codepoint, FT_KERNING_DEFAULT, &kerning);
+
+					if(kerning.x != 0)
+					{
+						auto cp_from = font_wchar(codepoint_from);
+						auto cp_to = font_wchar(codepoint);
+
+						auto kern_value = FT_CEIL(kerning.x);
+						dst_font->kernings[{cp_from, cp_to}] = kern_value;
+					}
+				}
+			}
 
             dst_font->add_glyph(font_wchar(src_glyph.codepoint), x0, y0, x1, y1, u0, v0, u1, v1,
                                 char_advance_x_mod);
