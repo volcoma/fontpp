@@ -39,6 +39,15 @@
 #include FT_MODULE_H    // <freetype/ftmodapi.h>
 #include FT_SYNTHESIS_H // <freetype/ftsynth.h>
 
+//const char* get_ft_error_str(FT_Error err)
+//{
+//    #undef __FTERRORS_H__
+//    #define FT_ERRORDEF( e, v, s )  case e: return s;
+//    #define FT_ERROR_START_LIST     switch (err) {
+//    #define FT_ERROR_END_LIST       }
+//    #include FT_ERRORS_H
+//    return "(Unknown error)";
+//}
 #ifdef _MSC_VER
 #pragma warning(disable : 4505) // unreferenced local function has been removed (stb stuff)
 #endif
@@ -223,10 +232,6 @@ void font_ft::set_pixel_height(int pixel_height)
     // Update font info
     FT_Size_Metrics metrics = face->size->metrics;
 
-    std::cout << "------------------------------" << std::endl;
-    std::cout << "unscaled_ascent = " << metrics.ascender << std::endl;
-    std::cout << "unscaled_descent = " << metrics.descender << std::endl;
-
     info.pixel_height = uint32_t(pixel_height);
     info.ascender = FT_CEIL(metrics.ascender);
     info.descender = FT_CEIL(metrics.descender);
@@ -242,7 +247,10 @@ const FT_Glyph_Metrics* font_ft::load_glyph(uint32_t codepoint)
         return nullptr;
     FT_Error error = FT_Load_Glyph(face, glyph_index, load_flags);
     if(error)
+    {
+        //std::string err = get_ft_error_str(error);
         return nullptr;
+    }
 
     // Need an outline for this to work
     FT_GlyphSlot slot = face->glyph;
@@ -531,7 +539,7 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
             auto& src_glyph = src_tmp.glyphs_list[glyph_i];
 
             const FT_Glyph_Metrics* metrics = src_tmp.font.load_glyph(src_glyph.codepoint);
-            assert(metrics != nullptr);
+            //assert(metrics != nullptr);
             if(metrics == nullptr)
                 continue;
 
@@ -553,8 +561,8 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
             src_tmp.font.blit_glyph(ft_bitmap, src_glyph.bitmap_data, src_glyph.info.width * 1,
                                     multiply_enabled ? multiply_table : nullptr);
 
-            src_tmp.rects[glyph_i].w = stbrp_coord(src_glyph.info.width + padding + cfg.oversample_h - 1);
-            src_tmp.rects[glyph_i].h = stbrp_coord(src_glyph.info.height + padding + cfg.oversample_v - 1);
+            src_tmp.rects[glyph_i].w = stbrp_coord(src_glyph.info.width + padding/* + cfg.oversample_h - 1*/);
+            src_tmp.rects[glyph_i].h = stbrp_coord(src_glyph.info.height + padding/* + cfg.oversample_v - 1*/);
             total_surface += src_tmp.rects[glyph_i].w * src_tmp.rects[glyph_i].h;
         }
     }
@@ -633,13 +641,6 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
         const float line_gap = src_tmp.font.info.line_gap;
         const float line_height = (ascent - descent) + line_gap;
 
-        std::cout << "------------------------------" << std::endl;
-        std::cout << "ascent = " << ascent << std::endl;
-        std::cout << "descent = " << descent << std::endl;
-        std::cout << "line_gap = " << line_gap << std::endl;
-        std::cout << "line_height = " << line_height << std::endl;
-
-
         atlas->setup_font(dst_font, &cfg, ascent, descent, line_height);
         const float font_off_x = cfg.glyph_offset_x;
         const float font_off_y = cfg.glyph_offset_y;
@@ -658,8 +659,8 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
             }
             auto& info = src_glyph.info;
 
-            assert(info.width + padding <= pack_rect.w);
-            assert(info.height + padding <= pack_rect.h);
+            //assert(info.width + padding <= pack_rect.w);
+            //assert(info.height + padding <= pack_rect.h);
             const int tx = pack_rect.x + padding;
             const int ty = pack_rect.y + padding;
 
