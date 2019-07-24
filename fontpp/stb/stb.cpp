@@ -413,13 +413,13 @@ bool build(font_atlas* atlas, std::string& err)
                 {
                     const int codepoint_from = src_tmp.glyphs_list[size_t(glyph_j)];
                     auto kerning = stbtt_GetCodepointKernAdvance(&src_tmp.font_info, codepoint_from, codepoint);
-                    if( kerning )
+                    auto kern_value = int(float(kerning) * font_scale);
+                    if( kern_value )
                     {
-                        auto cp_from = size_t(codepoint_from);
-                        auto cp_to = size_t(codepoint);
+                        auto cp_from = font_wchar(codepoint_from);
+                        auto cp_to = font_wchar(codepoint);
 
-                        auto kern_value = float(kerning) * font_scale;
-                        dst_font->kernings[{cp_from, cp_to}] = kern_value;
+                        dst_font->kernings[{cp_from, cp_to}] = float(kern_value);
                     }
                 }
             }

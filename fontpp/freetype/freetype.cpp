@@ -60,7 +60,6 @@ namespace fnt
 namespace freetype
 {
 
-#ifdef HAS_FREETYPE
 namespace
 {
 // Glyph metrics:
@@ -532,7 +531,7 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
             auto& src_glyph = src_tmp.glyphs_list[glyph_i];
 
             const FT_Glyph_Metrics* metrics = src_tmp.font.load_glyph(src_glyph.codepoint);
-            //assert(metrics != nullptr);
+            assert(metrics != nullptr);
             if(metrics == nullptr)
                 continue;
 
@@ -554,8 +553,8 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
             src_tmp.font.blit_glyph(ft_bitmap, src_glyph.bitmap_data, src_glyph.info.width * 1,
                                     multiply_enabled ? multiply_table : nullptr);
 
-            src_tmp.rects[glyph_i].w = stbrp_coord(src_glyph.info.width + padding);
-            src_tmp.rects[glyph_i].h = stbrp_coord(src_glyph.info.height + padding);
+            src_tmp.rects[glyph_i].w = stbrp_coord(src_glyph.info.width + padding + cfg.oversample_h - 1);
+            src_tmp.rects[glyph_i].h = stbrp_coord(src_glyph.info.height + padding + cfg.oversample_v - 1);
             total_surface += src_tmp.rects[glyph_i].w * src_tmp.rects[glyph_i].h;
         }
     }
@@ -643,7 +642,7 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
 
         atlas->setup_font(dst_font, &cfg, ascent, descent, line_height);
         const float font_off_x = cfg.glyph_offset_x;
-        const float font_off_y = cfg.glyph_offset_y; // + (float)(int)(dst_font->ascent + 0.5f);
+        const float font_off_y = cfg.glyph_offset_y;
         const auto sdf_spread = atlas->sdf_spread;
         bool has_kerning_table = FT_HAS_KERNING(src_tmp.font.face);
 
@@ -659,8 +658,8 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
             }
             auto& info = src_glyph.info;
 
-            //assert(info.width + padding <= pack_rect.w);
-            //assert(info.height + padding <= pack_rect.h);
+            assert(info.width + padding <= pack_rect.w);
+            assert(info.height + padding <= pack_rect.h);
             const int tx = pack_rect.x + padding;
             const int ty = pack_rect.y + padding;
 
@@ -691,7 +690,8 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
             float ft_v0 = (ty) / float(atlas->tex_height);
             float ft_u1 = (tx + info.width) / float(atlas->tex_width);
             float ft_v1 = (ty + info.height) / float(atlas->tex_height);
-
+            sdf_shift_x = 0;
+            sdf_shift_y = 0;
             float xsize = ft_u1 - ft_u0;
             float ysize = ft_v1 - ft_v0;
             auto u0 = ft_u0 - sdf_shift_x;
@@ -750,11 +750,9 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
     return true;
 }
 }
-#endif
 
 bool build(font_atlas* atlas, std::string& err, unsigned int extra_flags)
 {
-#ifdef HAS_FREETYPE
 
     // https://www.freetype.org/freetype2/docs/reference/ft2-module_management.html#FT_New_Library
     FT_Library ft_library;
@@ -770,9 +768,6 @@ bool build(font_atlas* atlas, std::string& err, unsigned int extra_flags)
     FT_Done_Library(ft_library);
 
     return ret;
-#else
-    return false;
-#endif
 }
 }
 }
