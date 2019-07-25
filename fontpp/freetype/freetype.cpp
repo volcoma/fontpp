@@ -508,7 +508,7 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
     // transform) We allocate in chunks of 256 KB to not waste too much extra memory ahead. Hopefully users of
     // FreeType won't find the temporary allocations.
     const int chunk_size = 256 * 1024;
-    int buf_bitmap_current_used_bytes = 0;
+    uint32_t buf_bitmap_current_used_bytes = 0;
     std::vector<std::vector<uint8_t>> buf_bitmap_buffers;
     buf_bitmap_buffers.emplace_back(chunk_size);
 
@@ -533,7 +533,7 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
             font_atlas_build_multiply_calc_lookup_table(multiply_table, cfg.rasterizer_multiply);
 
         // Gather the sizes of all rectangles we will need to pack
-        const auto padding = int(atlas->tex_glyph_padding);
+        const auto padding = stbrp_coord(atlas->tex_glyph_padding);
         for(size_t glyph_i = 0; glyph_i < src_tmp.glyphs_list.size(); glyph_i++)
         {
             auto& src_glyph = src_tmp.glyphs_list[glyph_i];
@@ -548,7 +548,7 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
             assert(ft_bitmap);
 
             // Allocate new temporary chunk if needed
-            const int bitmap_size_in_bytes = src_glyph.info.width * src_glyph.info.height;
+            const uint32_t bitmap_size_in_bytes = src_glyph.info.width * src_glyph.info.height;
             if(buf_bitmap_current_used_bytes + bitmap_size_in_bytes > chunk_size)
             {
                 buf_bitmap_current_used_bytes = 0;
@@ -561,8 +561,8 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
             src_tmp.font.blit_glyph(ft_bitmap, src_glyph.bitmap_data, src_glyph.info.width * 1,
                                     multiply_enabled ? multiply_table : nullptr);
 
-            src_tmp.rects[glyph_i].w = stbrp_coord(src_glyph.info.width + padding/* + cfg.oversample_h - 1*/);
-            src_tmp.rects[glyph_i].h = stbrp_coord(src_glyph.info.height + padding/* + cfg.oversample_v - 1*/);
+            src_tmp.rects[glyph_i].w = stbrp_coord(src_glyph.info.width + padding);
+            src_tmp.rects[glyph_i].h = stbrp_coord(src_glyph.info.height + padding);
             total_surface += src_tmp.rects[glyph_i].w * src_tmp.rects[glyph_i].h;
         }
     }
@@ -669,30 +669,29 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
             auto blit_dst_stride = size_t(atlas->tex_width);
             uint8_t* blit_src = src_glyph.bitmap_data;
             uint8_t* blit_dst = atlas->tex_pixels_alpha8.data() + (size_t(ty) * blit_dst_stride) + size_t(tx);
-            for(int y = info.height; y > 0; y--, blit_dst += blit_dst_stride, blit_src += blit_src_stride)
+            for(auto y = int(info.height); y > 0; y--, blit_dst += blit_dst_stride, blit_src += blit_src_stride)
                 std::memcpy(blit_dst, blit_src, blit_src_stride);
 
             float char_advance_x_org = info.advance_x;
             const float char_advance_x_mod =
                 clamp(char_advance_x_org, cfg.glyph_min_advance_x, cfg.glyph_max_advance_x);
             float char_off_x = font_off_x;
-            if(char_advance_x_org != char_advance_x_mod)
+            if(std::fabs(char_advance_x_org - char_advance_x_mod) > std::numeric_limits<float>::epsilon())
                 char_off_x += cfg.pixel_snap_h
-                                  ? (float)(int)((char_advance_x_mod - char_advance_x_org) * 0.5f)
+                                  ? float(int((char_advance_x_mod - char_advance_x_org) * 0.5f))
                                   : (char_advance_x_mod - char_advance_x_org) * 0.5f;
-            auto sdf_shift_x = (float(sdf_spread)) / atlas->tex_width;
-            auto sdf_shift_y = (float(sdf_spread)) / atlas->tex_height;
+            auto sdf_shift_x = float(sdf_spread) / atlas->tex_width;
+            auto sdf_shift_y = float(sdf_spread) / atlas->tex_height;
             // Register glyph
             float ft_x0 = info.offset_x + char_off_x;
             float ft_y0 = info.offset_y + font_off_y;
             float ft_x1 = ft_x0 + info.width;
             float ft_y1 = ft_y0 + info.height;
-            float ft_u0 = (tx) / float(atlas->tex_width);
-            float ft_v0 = (ty) / float(atlas->tex_height);
-            float ft_u1 = (tx + info.width) / float(atlas->tex_width);
-            float ft_v1 = (ty + info.height) / float(atlas->tex_height);
-            sdf_shift_x = 0;
-            sdf_shift_y = 0;
+            float ft_u0 = float(tx) / float(atlas->tex_width);
+            float ft_v0 = float(ty) / float(atlas->tex_height);
+            float ft_u1 = (float(tx) + info.width) / float(atlas->tex_width);
+            float ft_v1 = (float(ty) + info.height) / float(atlas->tex_height);
+
             float xsize = ft_u1 - ft_u0;
             float ysize = ft_v1 - ft_v0;
             auto u0 = ft_u0 - sdf_shift_x;

@@ -359,7 +359,7 @@ bool build(font_atlas* atlas, std::string& err)
 			const float char_advance_x_mod =
 				clamp(char_advance_x_org, cfg.glyph_min_advance_x, cfg.glyph_max_advance_x);
 			float char_off_x = font_off_x;
-			if(fabs(char_advance_x_org - char_advance_x_mod) > std::numeric_limits<float>::epsilon())
+			if(std::fabs(char_advance_x_org - char_advance_x_mod) > std::numeric_limits<float>::epsilon())
 				char_off_x += cfg.pixel_snap_h ? static_cast<float>(static_cast<int>(
 													 (char_advance_x_mod - char_advance_x_org) * 0.5f))
 											   : (char_advance_x_mod - char_advance_x_org) * 0.5f;
@@ -414,7 +414,6 @@ bool build(font_atlas* atlas, std::string& err)
                     }
                 }
             }
-
 
 			dst_font->add_glyph(font_wchar(codepoint), x0 + char_off_x, y0 + font_off_y, x1 + char_off_x,
 								y1 + font_off_y, u0, v0, u1, v1, char_advance_x_mod);
