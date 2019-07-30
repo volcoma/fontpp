@@ -280,8 +280,8 @@ const FT_Bitmap* font_ft::render_glyph_and_get_info(glyph_info_ft* out_glyph_inf
         return nullptr;
 
     FT_Bitmap* ft_bitmap = &face->glyph->bitmap;
-    out_glyph_info->width = uint32_t(ft_bitmap->width);
-    out_glyph_info->height = uint32_t(ft_bitmap->rows);
+    out_glyph_info->width = uint32_t(ft_bitmap->width) + 1;
+    out_glyph_info->height = uint32_t(ft_bitmap->rows) + 1;
     out_glyph_info->offset_x = face->glyph->bitmap_left;
     out_glyph_info->offset_y = -face->glyph->bitmap_top;
     out_glyph_info->advance_x = FT_CEIL(slot->advance.x);
@@ -683,12 +683,13 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
             auto sdf_shift_x = float(sdf_spread) / atlas->tex_width;
             auto sdf_shift_y = float(sdf_spread) / atlas->tex_height;
             // Register glyph
-            float ft_x0 = info.offset_x + char_off_x;
-            float ft_y0 = info.offset_y + font_off_y;
+            float ft_x0 = info.offset_x;;
+            float ft_y0 = info.offset_y;
             float ft_x1 = ft_x0 + info.width;
             float ft_y1 = ft_y0 + info.height;
             float ft_u0 = float(tx) / float(atlas->tex_width);
             float ft_v0 = float(ty) / float(atlas->tex_height);
+
             float ft_u1 = (float(tx) + info.width) / float(atlas->tex_width);
             float ft_v1 = (float(ty) + info.height) / float(atlas->tex_height);
 
@@ -738,7 +739,7 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
 				}
 			}
 
-            dst_font->add_glyph(font_wchar(src_glyph.codepoint), x0, y0, x1, y1, u0, v0, u1, v1,
+            dst_font->add_glyph(font_wchar(src_glyph.codepoint), x0 + char_off_x, y0 + font_off_y, x1 + char_off_x, y1 + font_off_y, u0, v0, u1, v1,
                                 char_advance_x_mod);
         }
 
