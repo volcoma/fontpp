@@ -280,8 +280,8 @@ const FT_Bitmap* font_ft::render_glyph_and_get_info(glyph_info_ft* out_glyph_inf
         return nullptr;
 
     FT_Bitmap* ft_bitmap = &face->glyph->bitmap;
-    out_glyph_info->width = uint32_t(ft_bitmap->width) + 1;
-    out_glyph_info->height = uint32_t(ft_bitmap->rows) + 1;
+    out_glyph_info->width = uint32_t(ft_bitmap->width);
+    out_glyph_info->height = uint32_t(ft_bitmap->rows);
     out_glyph_info->offset_x = face->glyph->bitmap_left;
     out_glyph_info->offset_y = -face->glyph->bitmap_top;
     out_glyph_info->advance_x = FT_CEIL(slot->advance.x);
