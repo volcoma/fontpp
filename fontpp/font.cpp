@@ -968,6 +968,16 @@ void font_info::build_lookup_table()
 	for(size_t i = 0; i < max_codepoint + 1; i++)
 		if(index_advance_x[i] < 0.0f)
 			index_advance_x[i] = fallback_advance_x;
+
+    auto x_glyph = find_glyph('x');
+    if(x_glyph)
+    {
+        x_height = x_glyph->y1 - x_glyph->y0;
+    }
+    else
+    {
+        x_height = ascent - descent;
+    }
 }
 
 void font_info::set_fallback_char(font_wchar c)
