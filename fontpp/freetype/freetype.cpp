@@ -137,6 +137,15 @@ struct font_info_ft
     float max_advance_width{};
 };
 
+
+struct glyph_ft
+{
+    glyph_info_ft info{};
+    uint32_t codepoint{};
+    uint32_t glyph_index{};
+    // Point within one of the dst_tmp_bitmap_buffers[] array
+    uint8_t* bitmap_data{};
+};
 // FreeType glyph rasterizer.
 struct font_ft
 {
@@ -148,7 +157,7 @@ struct font_ft
     // Change font pixel size. All following calls to RasterizeGlyph()
     // will use this size
     void set_pixel_height(int pixel_height);
-    const FT_Glyph_Metrics* load_glyph(uint32_t in_codepoint);
+    const FT_Glyph_Metrics* load_glyph(glyph_ft& in_glyph);
     const FT_Bitmap* render_glyph_and_get_info(glyph_info_ft* out_glyph_info);
     void blit_glyph(const FT_Bitmap* ft_bitmap, uint8_t* dst, uint32_t dst_pitch,
                     const uint8_t* multiply_table = nullptr);
@@ -216,7 +225,7 @@ void font_ft::close()
 
 void font_ft::set_pixel_height(int pixel_height)
 {
-    // Vuhdo: I'm not sure how to deal with font sizes properly. As far as I understand, currently ImGui
+    // Vuhdo: I'm not sure how to deal with font sizes properly. As far as I understand, currently stb
     // assumes that the 'pixel_height' is a maximum height of an any given glyph, i.e. it's the sum of font's
     // ascender and descender. Seems strange to me. NB: FT_Set_Pixel_Sizes() doesn't seem to get us the same
     // result.
@@ -231,21 +240,35 @@ void font_ft::set_pixel_height(int pixel_height)
 
     // Update font info
     FT_Size_Metrics metrics = face->size->metrics;
-
     info.pixel_height = uint32_t(pixel_height);
-    info.ascender = FT_CEIL(metrics.ascender);
-    info.descender = FT_CEIL(metrics.descender);
-    info.line_spacing = FT_CEIL(metrics.height);
-    info.line_gap = FT_CEIL(metrics.height - metrics.ascender + metrics.descender);
-    info.max_advance_width = FT_CEIL(metrics.max_advance);
+
+    if(FT_IS_SCALABLE(face))
+    {
+        auto yscale = metrics.y_scale;
+        auto xscale = metrics.x_scale;
+
+        info.ascender = FT_CEIL(FT_MulFix(face->ascender, yscale));
+        info.descender = FT_CEIL(FT_MulFix(face->descender, yscale));
+        info.line_spacing = FT_CEIL(FT_MulFix(face->height, yscale));
+        info.max_advance_width = FT_CEIL(FT_MulFix(face->max_advance_width, xscale));
+
+    }
+    else
+    {
+        info.ascender = FT_CEIL(metrics.ascender);
+        info.descender = FT_CEIL(metrics.descender);
+        info.line_spacing = FT_CEIL(metrics.height);
+        info.max_advance_width = FT_CEIL(metrics.max_advance);
+    }
+    info.line_gap = info.line_spacing - info.ascender +info.descender;
 }
 
-const FT_Glyph_Metrics* font_ft::load_glyph(uint32_t codepoint)
+const FT_Glyph_Metrics* font_ft::load_glyph(glyph_ft& in_glyph)
 {
-    uint32_t glyph_index = FT_Get_Char_Index(face, codepoint);
-    if(glyph_index == 0)
+    in_glyph.glyph_index = FT_Get_Char_Index(face, in_glyph.codepoint);
+    if(in_glyph.glyph_index == 0)
         return nullptr;
-    FT_Error error = FT_Load_Glyph(face, glyph_index, load_flags);
+    FT_Error error = FT_Load_Glyph(face, in_glyph.glyph_index, load_flags);
     if(error)
     {
         //std::string err = get_ft_error_str(error);
@@ -346,14 +369,6 @@ void font_atlas_build_multiply_calc_lookup_table(uint8_t out_table[256], float i
         out_table[i] = value > 255 ? 255 : (value & 0xFF);
     }
 }
-
-struct glyph_ft
-{
-    glyph_info_ft info{};
-    uint32_t codepoint{};
-    // Point within one of the dst_tmp_bitmap_buffers[] array
-    uint8_t* bitmap_data{};
-};
 
 struct font_info_build_src_data
 {
@@ -538,7 +553,7 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
         {
             auto& src_glyph = src_tmp.glyphs_list[glyph_i];
 
-            const FT_Glyph_Metrics* metrics = src_tmp.font.load_glyph(src_glyph.codepoint);
+            const FT_Glyph_Metrics* metrics = src_tmp.font.load_glyph(src_glyph);
             //assert(metrics != nullptr);
             if(metrics == nullptr)
                 continue;
@@ -722,12 +737,15 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
 			if(has_kerning_table && cfg.kerning_glyphs_limit > uint32_t(src_tmp.glyphs_count))
 			{
                 const auto codepoint = src_glyph.codepoint;
+                const auto glyph_index = src_glyph.glyph_index;
+
 				for(int glyph_j = 0; glyph_j < src_tmp.glyphs_count; glyph_j++)
 				{
 					const auto codepoint_from = src_tmp.glyphs_list[size_t(glyph_j)].codepoint;
-                    FT_Vector kerning{};
-                    FT_Get_Kerning(src_tmp.font.face, codepoint_from, codepoint, FT_KERNING_DEFAULT, &kerning);
+                    const auto glyph_index_from = src_tmp.glyphs_list[size_t(glyph_j)].glyph_index;
 
+                    FT_Vector kerning{};
+                    FT_Get_Kerning(src_tmp.font.face, glyph_index_from, glyph_index, FT_KERNING_DEFAULT, &kerning);
 					if(kerning.x != 0)
 					{
 						auto cp_from = font_wchar(codepoint_from);
