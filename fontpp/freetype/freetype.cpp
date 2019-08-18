@@ -784,7 +784,7 @@ bool build(font_atlas* atlas, std::string& err, unsigned int extra_flags)
     FT_Add_Default_Modules(ft_library);
 
     bool ret = build(ft_library, atlas, err, extra_flags);
-    FT_Done_Library(ft_library);
+    FT_Done_FreeType(ft_library);
 
     return ret;
 }
