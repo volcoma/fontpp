@@ -698,8 +698,8 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
             auto sdf_shift_x = float(sdf_spread) / atlas->tex_width;
             auto sdf_shift_y = float(sdf_spread) / atlas->tex_height;
             // Register glyph
-            float ft_x0 = info.offset_x;;
-            float ft_y0 = info.offset_y;
+            auto ft_x0 = float(info.offset_x);
+            auto ft_y0 = float(info.offset_y);
             float ft_x1 = ft_x0 + info.width;
             float ft_y1 = ft_y0 + info.height;
             float ft_u0 = float(tx) / float(atlas->tex_width);
