@@ -972,7 +972,7 @@ void font_info::build_lookup_table()
     auto x_glyph = find_glyph('x');
     if(x_glyph)
     {
-        x_height = x_glyph->y1 - x_glyph->y0;
+        x_height = -x_glyph->y0;
     }
     else
     {
