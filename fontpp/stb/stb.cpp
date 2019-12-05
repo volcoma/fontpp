@@ -347,7 +347,7 @@ bool build(font_atlas* atlas, std::string& err)
 		atlas->setup_font(dst_font, &cfg, ascent, descent, line_height);
 		const float font_off_x = cfg.glyph_offset_x;
 		const float font_off_y = cfg.glyph_offset_y;
-		const auto sdf_spread = atlas->sdf_spread;
+        const auto sdf_spread = atlas->sdf_spread;
 		bool has_kerning_table = src_tmp.font_info.kern || src_tmp.font_info.gpos;
 
 		for(int glyph_i = 0; glyph_i < src_tmp.glyphs_count; glyph_i++)
@@ -372,8 +372,13 @@ bool build(font_atlas* atlas, std::string& err)
 
 			float xsize = q.s1 - q.s0;
 			float ysize = q.t1 - q.t0;
-			auto sdf_shift_x = (float(sdf_spread)) / atlas->tex_width;
-			auto sdf_shift_y = (float(sdf_spread)) / atlas->tex_height;
+            auto sdf_shift_x = 0.0f;
+            auto sdf_shift_y = 0.0f;
+            if(sdf_spread > 0)
+            {
+                sdf_shift_x = (float(sdf_spread + 1)) / atlas->tex_width;
+                sdf_shift_y = (float(sdf_spread + 1)) / atlas->tex_height;
+            }
 			auto u0 = q.s0 - sdf_shift_x;
 			auto v0 = q.t0 - sdf_shift_y;
 			auto u1 = q.s1 + sdf_shift_x;

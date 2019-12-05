@@ -695,8 +695,13 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
                 char_off_x += cfg.pixel_snap_h
                                   ? float(int((char_advance_x_mod - char_advance_x_org) * 0.5f))
                                   : (char_advance_x_mod - char_advance_x_org) * 0.5f;
-            auto sdf_shift_x = float(sdf_spread) / atlas->tex_width;
-            auto sdf_shift_y = float(sdf_spread) / atlas->tex_height;
+            auto sdf_shift_x = 0.0f;
+            auto sdf_shift_y = 0.0f;
+            if(sdf_spread > 0)
+            {
+                sdf_shift_x = (float(sdf_spread + 1)) / atlas->tex_width;
+                sdf_shift_y = (float(sdf_spread + 1)) / atlas->tex_height;
+            }
             // Register glyph
             auto ft_x0 = float(info.offset_x);
             auto ft_y0 = float(info.offset_y);
