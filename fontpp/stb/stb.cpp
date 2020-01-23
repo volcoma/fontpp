@@ -422,6 +422,11 @@ bool build(font_atlas* atlas, std::string& err)
 
 			dst_font->add_glyph(font_wchar(codepoint), x0 + char_off_x, y0 + font_off_y, x1 + char_off_x,
 								y1 + font_off_y, u0, v0, u1, v1, char_advance_x_mod);
+
+            if(font_wchar(codepoint) == 'x')
+            {
+                dst_font->x_height = -q.y0;
+            }
 		}
 	}
 

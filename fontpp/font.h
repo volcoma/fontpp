@@ -345,6 +345,8 @@ struct font_info
 	float descent{}; // out
 	float line_height{};
     float x_height{};
+    float ysuperscript_offset{};
+    float ysubscript_offset{};
 	// Total surface in pixels to get an idea of the
 	// font rasterization/texture cost (not exact, we approximate the cost of padding
 	// between glyphs)

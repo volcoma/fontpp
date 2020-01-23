@@ -969,12 +969,7 @@ void font_info::build_lookup_table()
 		if(index_advance_x[i] < 0.0f)
 			index_advance_x[i] = fallback_advance_x;
 
-    auto x_glyph = find_glyph('x');
-    if(x_glyph)
-    {
-        x_height = -x_glyph->y0;
-    }
-    else
+    if(x_height <= 0.0f)
     {
         x_height = ascent - descent;
     }

@@ -32,6 +32,7 @@
 #include "../font.h"
 
 #include <ft2build.h>
+#include <freetype/tttables.h>
 #include <iostream>
 
 #include FT_FREETYPE_H  // <freetype/freetype.h>
@@ -135,6 +136,9 @@ struct font_info_ft
     float line_gap{};
     // This field gives the maximum horizontal cursor advance for all glyphs in the font.
     float max_advance_width{};
+
+    float ysuperscript_offset{};
+    float ysubscript_offset{};
 };
 
 
@@ -261,6 +265,13 @@ void font_ft::set_pixel_height(int pixel_height)
         info.max_advance_width = FT_CEIL(metrics.max_advance);
     }
     info.line_gap = info.line_spacing - info.ascender +info.descender;
+
+    auto table = (TT_OS2*)FT_Get_Sfnt_Table(face, FT_Sfnt_Tag::FT_SFNT_OS2);
+    if(table)
+    {
+        info.ysuperscript_offset = FT_CEIL(table->ySuperscriptYOffset);
+        info.ysubscript_offset = FT_CEIL(table->ySubscriptYOffset);
+    }
 }
 
 const FT_Glyph_Metrics* font_ft::load_glyph(glyph_ft& in_glyph)
@@ -657,6 +668,9 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
         const float line_height = (ascent - descent) + line_gap;
 
         atlas->setup_font(dst_font, &cfg, ascent, descent, line_height);
+        dst_font->ysuperscript_offset = src_tmp.font.info.ysuperscript_offset;
+        dst_font->ysubscript_offset = src_tmp.font.info.ysubscript_offset;
+
         const float font_off_x = cfg.glyph_offset_x;
         const float font_off_y = cfg.glyph_offset_y;
         const auto sdf_spread = atlas->sdf_spread;
@@ -764,6 +778,11 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
 
             dst_font->add_glyph(font_wchar(src_glyph.codepoint), x0 + char_off_x, y0 + font_off_y, x1 + char_off_x, y1 + font_off_y, u0, v0, u1, v1,
                                 char_advance_x_mod);
+
+            if(font_wchar(src_glyph.codepoint) == 'x')
+            {
+                dst_font->x_height = -ft_y0;
+            }
         }
 
         src_tmp.rects = nullptr;
