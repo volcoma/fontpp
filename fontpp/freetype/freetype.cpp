@@ -136,9 +136,12 @@ struct font_info_ft
     float line_gap{};
     // This field gives the maximum horizontal cursor advance for all glyphs in the font.
     float max_advance_width{};
-
+    float xheight{};
+    float cap_height{};
     float ysuperscript_offset{};
+    float ysuperscript_size{};
     float ysubscript_offset{};
+    float ysubscript_size{};
 };
 
 
@@ -245,11 +248,11 @@ void font_ft::set_pixel_height(int pixel_height)
     // Update font info
     FT_Size_Metrics metrics = face->size->metrics;
     info.pixel_height = uint32_t(pixel_height);
+    auto yscale = metrics.y_scale;
+    auto xscale = metrics.x_scale;
 
     if(FT_IS_SCALABLE(face))
     {
-        auto yscale = metrics.y_scale;
-        auto xscale = metrics.x_scale;
 
         info.ascender = FT_CEIL(FT_MulFix(face->ascender, yscale));
         info.descender = FT_CEIL(FT_MulFix(face->descender, yscale));
@@ -266,11 +269,75 @@ void font_ft::set_pixel_height(int pixel_height)
     }
     info.line_gap = info.line_spacing - info.ascender +info.descender;
 
-    auto table = (TT_OS2*)FT_Get_Sfnt_Table(face, FT_Sfnt_Tag::FT_SFNT_OS2);
-    if(table)
     {
-        info.ysuperscript_offset = FT_CEIL(table->ySuperscriptYOffset);
-        info.ysubscript_offset = FT_CEIL(table->ySubscriptYOffset);
+        auto table = (TT_OS2*)FT_Get_Sfnt_Table(face, FT_Sfnt_Tag::FT_SFNT_OS2);
+        if(table)
+        {
+            if(FT_IS_SCALABLE(face))
+            {
+                info.ysuperscript_size = FT_CEIL(FT_MulFix(table->ySuperscriptYSize, yscale));
+                info.ysuperscript_offset = FT_CEIL(FT_MulFix(table->ySuperscriptYOffset, yscale));
+                info.ysubscript_size = FT_CEIL(FT_MulFix(table->ySubscriptYSize, yscale));
+                info.ysubscript_offset = FT_CEIL(FT_MulFix(table->ySubscriptYOffset, yscale));
+                info.cap_height = FT_CEIL(FT_MulFix(table->sCapHeight, yscale));
+                info.xheight = FT_CEIL(FT_MulFix(table->sxHeight, yscale));
+            }
+            else
+            {
+                info.ysuperscript_size = FT_CEIL(table->ySuperscriptYSize);
+                info.ysuperscript_offset = FT_CEIL(table->ySuperscriptYOffset);
+                info.ysubscript_size = FT_CEIL(table->ySubscriptYSize);
+                info.ysubscript_offset = FT_CEIL(table->ySubscriptYOffset);
+                info.cap_height = FT_CEIL(table->sCapHeight);
+                info.xheight = FT_CEIL(table->sxHeight);
+            }
+
+            float superscript_scale = float(pixel_height) / info.ysuperscript_size;
+            //info.ysuperscript_size *= superscript_scale;
+            info.ysuperscript_offset *= superscript_scale;
+
+            float subscript_scale = float(pixel_height) / info.ysubscript_size;
+            //info.ysubscript_size *= subscript_scale;
+            info.ysubscript_offset *= subscript_scale;
+        }
+    }
+    {
+        auto table = (TT_PCLT*)FT_Get_Sfnt_Table(face, FT_Sfnt_Tag::FT_SFNT_PCLT);
+        if(table)
+        {
+            if(FT_IS_SCALABLE(face))
+            {
+                info.cap_height = FT_CEIL(FT_MulFix(table->CapHeight, yscale));
+                info.xheight = FT_CEIL(FT_MulFix(table->xHeight, yscale));
+            }
+            else
+            {
+                info.cap_height = FT_CEIL(table->CapHeight);
+                info.xheight = FT_CEIL(table->xHeight);
+            }
+        }
+    }
+
+    if(info.xheight == 0.0f)
+    {
+        glyph_ft x_glyph{};
+        x_glyph.codepoint = 'x';
+        auto x_metrics = load_glyph(x_glyph);
+        if(x_metrics)
+        {
+            info.xheight = FT_CEIL(x_metrics->height);
+        }
+    }
+
+    if(info.cap_height == 0.0f)
+    {
+        glyph_ft h_glyph{};
+        h_glyph.codepoint = 'H';
+        auto h_metrics = load_glyph(h_glyph);
+        if(h_metrics)
+        {
+            info.cap_height = FT_CEIL(h_metrics->height);
+        }
     }
 }
 
@@ -665,11 +732,17 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
         const float ascent = src_tmp.font.info.ascender;
         const float descent = src_tmp.font.info.descender;
         const float line_gap = src_tmp.font.info.line_gap;
+        const float ysuperscript_size = src_tmp.font.info.ysuperscript_size;
+        const float ysuperscript_offset = src_tmp.font.info.ysuperscript_offset;
+        const float ysubscript_size = src_tmp.font.info.ysubscript_size;
+        const float ysubscript_offset = src_tmp.font.info.ysubscript_offset;
+        const float xheight = src_tmp.font.info.xheight;
+        const float cap_height = src_tmp.font.info.cap_height;
+
         const float line_height = (ascent - descent) + line_gap;
 
-        atlas->setup_font(dst_font, &cfg, ascent, descent, line_height);
-        dst_font->ysuperscript_offset = src_tmp.font.info.ysuperscript_offset;
-        dst_font->ysubscript_offset = src_tmp.font.info.ysubscript_offset;
+        atlas->setup_font(dst_font, &cfg, ascent, descent, line_height, xheight, cap_height,
+                          ysuperscript_size, ysuperscript_offset, ysubscript_size, ysubscript_offset);
 
         const float font_off_x = cfg.glyph_offset_x;
         const float font_off_y = cfg.glyph_offset_y;
@@ -779,10 +852,14 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
             dst_font->add_glyph(font_wchar(src_glyph.codepoint), x0 + char_off_x, y0 + font_off_y, x1 + char_off_x, y1 + font_off_y, u0, v0, u1, v1,
                                 char_advance_x_mod);
 
-            if(font_wchar(src_glyph.codepoint) == 'x')
-            {
-                dst_font->x_height = -ft_y0;
-            }
+//            if(font_wchar(src_glyph.codepoint) == 'x')
+//            {
+//                dst_font->x_height = -ft_y0;
+//            }
+//            if(font_wchar(src_glyph.codepoint) == 'H')
+//            {
+//                dst_font->cap_height = -ft_y0;
+//            }
         }
 
         src_tmp.rects = nullptr;

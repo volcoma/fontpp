@@ -267,7 +267,16 @@ struct font_atlas
 	}
 
 	void finish();
-	void setup_font(font_info* font, font_config* font_config, float ascent, float descent, float line_heigt);
+    void setup_font(font_info* font, font_config* font_config,
+                    float ascent,
+                    float descent,
+                    float line_heigt,
+                    float x_height = 0.0f,
+                    float cap_height = 0.0f,
+                    float ysuperscript_size = 0.0f,
+                    float ysuperscript_offset = 0.0f,
+                    float ysubscript_size = 0.0f,
+                    float ysubscript_offset = 0.0f);
 	//-------------------------------------------
 	// Members
 	//-------------------------------------------
@@ -345,7 +354,10 @@ struct font_info
 	float descent{}; // out
 	float line_height{};
     float x_height{};
+    float cap_height{};
+    float ysuperscript_size{};
     float ysuperscript_offset{};
+    float ysubscript_size{};
     float ysubscript_offset{};
 	// Total surface in pixels to get an idea of the
 	// font rasterization/texture cost (not exact, we approximate the cost of padding

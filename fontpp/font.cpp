@@ -357,8 +357,16 @@ void font_atlas::finish()
 	}
 }
 
-void font_atlas::setup_font(font_info* font, font_config* font_config, float ascent, float descent,
-							float line_height)
+void font_atlas::setup_font(font_info* font, font_config* font_config,
+                            float ascent,
+                            float descent,
+                            float line_height,
+                            float x_height,
+                            float cap_height,
+                            float ysuperscript_size,
+                            float ysuperscript_offset,
+                            float ysubscript_size,
+                            float ysubscript_offset)
 {
 	if(!font_config->merge_mode)
 	{
@@ -369,6 +377,12 @@ void font_atlas::setup_font(font_info* font, font_config* font_config, float asc
 		font->ascent = ascent;
 		font->descent = descent;
 		font->line_height = line_height;
+        font->ysuperscript_size = ysuperscript_size;
+        font->ysuperscript_offset = ysuperscript_offset;
+        font->ysubscript_size = ysubscript_size;
+        font->ysubscript_offset = ysubscript_offset;
+        font->x_height = x_height;
+        font->cap_height = cap_height;
 	}
 	font->config_data_count++;
 }
