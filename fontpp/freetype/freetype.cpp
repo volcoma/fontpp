@@ -270,7 +270,7 @@ void font_ft::set_pixel_height(int pixel_height)
     info.line_gap = info.line_spacing - info.ascender +info.descender;
 
     {
-        auto table = (TT_OS2*)FT_Get_Sfnt_Table(face, FT_Sfnt_Tag::FT_SFNT_OS2);
+        auto table = reinterpret_cast<TT_OS2*>(FT_Get_Sfnt_Table(face, FT_Sfnt_Tag::FT_SFNT_OS2));
         if(table)
         {
             if(FT_IS_SCALABLE(face))
@@ -279,8 +279,12 @@ void font_ft::set_pixel_height(int pixel_height)
                 info.ysuperscript_offset = FT_CEIL(FT_MulFix(table->ySuperscriptYOffset, yscale));
                 info.ysubscript_size = FT_CEIL(FT_MulFix(table->ySubscriptYSize, yscale));
                 info.ysubscript_offset = FT_CEIL(FT_MulFix(table->ySubscriptYOffset, yscale));
-                info.cap_height = FT_CEIL(FT_MulFix(table->sCapHeight, yscale));
-                info.xheight = FT_CEIL(FT_MulFix(table->sxHeight, yscale));
+
+                if(table->version >= 2)
+                {
+                    info.cap_height = FT_CEIL(FT_MulFix(table->sCapHeight, yscale));
+                    info.xheight = FT_CEIL(FT_MulFix(table->sxHeight, yscale));
+                }
             }
             else
             {
@@ -288,36 +292,18 @@ void font_ft::set_pixel_height(int pixel_height)
                 info.ysuperscript_offset = FT_CEIL(table->ySuperscriptYOffset);
                 info.ysubscript_size = FT_CEIL(table->ySubscriptYSize);
                 info.ysubscript_offset = FT_CEIL(table->ySubscriptYOffset);
-                info.cap_height = FT_CEIL(table->sCapHeight);
-                info.xheight = FT_CEIL(table->sxHeight);
-            }
 
-            float superscript_scale = float(pixel_height) / info.ysuperscript_size;
-            //info.ysuperscript_size *= superscript_scale;
-            info.ysuperscript_offset *= superscript_scale;
-
-            float subscript_scale = float(pixel_height) / info.ysubscript_size;
-            //info.ysubscript_size *= subscript_scale;
-            info.ysubscript_offset *= subscript_scale;
-        }
-    }
-    {
-        auto table = (TT_PCLT*)FT_Get_Sfnt_Table(face, FT_Sfnt_Tag::FT_SFNT_PCLT);
-        if(table)
-        {
-            if(FT_IS_SCALABLE(face))
-            {
-                info.cap_height = FT_CEIL(FT_MulFix(table->CapHeight, yscale));
-                info.xheight = FT_CEIL(FT_MulFix(table->xHeight, yscale));
-            }
-            else
-            {
-                info.cap_height = FT_CEIL(table->CapHeight);
-                info.xheight = FT_CEIL(table->xHeight);
+                if(table->version >= 2)
+                {
+                    info.cap_height = FT_CEIL(table->sCapHeight);
+                    info.xheight = FT_CEIL(table->sxHeight);
+                }
             }
         }
     }
 
+//    std::string family_name = face->family_name;
+//    std::string style_name = face->style_name;
     if(info.xheight == 0.0f)
     {
         glyph_ft x_glyph{};
@@ -326,6 +312,10 @@ void font_ft::set_pixel_height(int pixel_height)
         if(x_metrics)
         {
             info.xheight = FT_CEIL(x_metrics->height);
+        }
+        else
+        {
+            info.xheight = (info.ascender - info.descender) * 0.5f;
         }
     }
 
@@ -337,6 +327,10 @@ void font_ft::set_pixel_height(int pixel_height)
         if(h_metrics)
         {
             info.cap_height = FT_CEIL(h_metrics->height);
+        }
+        else
+        {
+            info.cap_height = info.ascender;
         }
     }
 }

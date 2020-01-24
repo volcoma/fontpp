@@ -339,12 +339,37 @@ bool build(font_atlas* atlas, std::string& err)
 		int unscaled_ascent, unscaled_descent, unscaled_line_gap;
 		stbtt_GetFontVMetrics(&src_tmp.font_info, &unscaled_ascent, &unscaled_descent, &unscaled_line_gap);
 
-		const float ascent = std::floor(unscaled_ascent * font_scale);
-		const float descent = std::floor(unscaled_descent * font_scale);
-        const float line_gap = std::floor(unscaled_line_gap * font_scale);
+		const float ascent = std::floor(float(unscaled_ascent) * font_scale);
+		const float descent = std::floor(float(unscaled_descent) * font_scale);
+        const float line_gap = std::floor(float(unscaled_line_gap) * font_scale);
 		const float line_height = (ascent - descent) + line_gap;
+        float x_height = 0.0f;
+        float cap_height = 0.0f;
+        {
+            int x0{}, x1{}, y0{}, y1{};
+            if(stbtt_GetCodepointBox(&src_tmp.font_info, 'x', &x0, &y0, &x1, &y1))
+            {
+                x_height = std::floor(float(y1) * font_scale);
+            }
+            else
+            {
+                x_height = (ascent - descent) * 0.5f;
+            }
+        }
 
-		atlas->setup_font(dst_font, &cfg, ascent, descent, line_height);
+        {
+            int x0{}, x1{}, y0{}, y1{};
+            if(stbtt_GetCodepointBox(&src_tmp.font_info, 'H', &x0, &y0, &x1, &y1))
+            {
+                cap_height = std::floor(float(y1) * font_scale);
+            }
+            else
+            {
+                cap_height = ascent;
+            }
+        }
+
+		atlas->setup_font(dst_font, &cfg, ascent, descent, line_height, x_height, cap_height);
 		const float font_off_x = cfg.glyph_offset_x;
 		const float font_off_y = cfg.glyph_offset_y;
         const auto sdf_spread = atlas->sdf_spread;
@@ -423,10 +448,6 @@ bool build(font_atlas* atlas, std::string& err)
 			dst_font->add_glyph(font_wchar(codepoint), x0 + char_off_x, y0 + font_off_y, x1 + char_off_x,
 								y1 + font_off_y, u0, v0, u1, v1, char_advance_x_mod);
 
-            if(font_wchar(codepoint) == 'x')
-            {
-                dst_font->x_height = -q.y0;
-            }
 		}
 	}
 
