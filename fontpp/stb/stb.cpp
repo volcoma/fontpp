@@ -353,7 +353,7 @@ bool build(font_atlas* atlas, std::string& err)
             }
             else
             {
-                x_height = (ascent - descent) * 0.5f;
+                x_height = ascent * 0.5f;
             }
         }
 

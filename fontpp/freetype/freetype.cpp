@@ -315,7 +315,7 @@ void font_ft::set_pixel_height(int pixel_height)
         }
         else
         {
-            info.xheight = (info.ascender - info.descender) * 0.5f;
+            info.xheight = info.ascender * 0.5f;
         }
     }
 
