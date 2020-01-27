@@ -110,7 +110,7 @@ void generate_sdf_parallel(uint8_t* output, const uint8_t* input, int width, int
 
         auto value = sample(input, width, height, x, y, spread);
         output[i] = uint8_t(std::round(clamp(value, 0.f, 1.f) * 255));
-    }, width / 4);
+    });
 }
 
 // Load file content into memory
@@ -360,11 +360,15 @@ bool font_atlas::build(font_rasterizer raster, std::string& err)
 
 void font_atlas::finish()
 {
+    size_t total_glyphs{};
 	// Build all fonts lookup tables
 	for(auto& font : fonts)
+    {
 		if(font->dirty_lookup_tables)
 			font->build_lookup_table();
 
+        total_glyphs += font->glyphs.size();
+    }
 	if(sdf_spread > 0)
 	{
 		std::vector<uint8_t> sdf(tex_pixels_alpha8.size());
@@ -374,14 +378,14 @@ void font_atlas::finish()
 //            generate_sdf(sdf.data(), tex_pixels_alpha8.data(), int(tex_width), int(tex_height), int(sdf_spread));
 //            auto end = std::chrono::high_resolution_clock::now();
 //            auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-//            std::cout << "[  serial  ] sdf vectorization on (" << tex_width << "x" << tex_height << ") took : " << dur.count() << "ms" << std::endl;
+//            std::cout << "[st] sdf vectorization on (" << tex_width << "x" << tex_height << ")(glyphs:" << total_glyphs << ") took : " << dur.count() << "ms" << std::endl;
 //        }
         {
             auto start = std::chrono::high_resolution_clock::now();
             generate_sdf_parallel(sdf.data(), tex_pixels_alpha8.data(), int(tex_width), int(tex_height), int(sdf_spread));
             auto end = std::chrono::high_resolution_clock::now();
             auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-            std::cout << "[ parallel ] sdf vectorization on (" << tex_width << "x" << tex_height << ") took : " << dur.count() << "ms" << std::endl;
+            std::cout << "[mt] sdf vectorization on (" << tex_width << "x" << tex_height << ")(glyphs:" << total_glyphs << ") took : " << dur.count() << "ms" << std::endl;
         }
 
         tex_pixels_alpha8 = std::move(sdf);

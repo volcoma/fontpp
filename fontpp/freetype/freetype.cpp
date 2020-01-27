@@ -822,28 +822,28 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
             auto y1 = ft_y1 + sdf_shift_y;
 
             // if no kerning table, don't waste time looking
-			if(has_kerning_table && cfg.kerning_glyphs_limit > uint32_t(src_tmp.glyphs_count))
-			{
+            if(has_kerning_table && cfg.kerning_glyphs_limit > uint32_t(src_tmp.glyphs_count))
+            {
                 const auto codepoint = src_glyph.codepoint;
                 const auto glyph_index = src_glyph.glyph_index;
 
-				for(int glyph_j = 0; glyph_j < src_tmp.glyphs_count; glyph_j++)
-				{
-					const auto codepoint_from = src_tmp.glyphs_list[size_t(glyph_j)].codepoint;
+                for(int glyph_j = 0; glyph_j < src_tmp.glyphs_count; glyph_j++)
+                {
+                    const auto codepoint_from = src_tmp.glyphs_list[size_t(glyph_j)].codepoint;
                     const auto glyph_index_from = src_tmp.glyphs_list[size_t(glyph_j)].glyph_index;
 
                     FT_Vector kerning{};
                     FT_Get_Kerning(src_tmp.font.face, glyph_index_from, glyph_index, FT_KERNING_DEFAULT, &kerning);
-					if(kerning.x != 0)
-					{
-						auto cp_from = font_wchar(codepoint_from);
-						auto cp_to = font_wchar(codepoint);
+                    if(kerning.x != 0)
+                    {
+                        auto cp_from = font_wchar(codepoint_from);
+                        auto cp_to = font_wchar(codepoint);
 
-						auto kern_value = FT_CEIL(kerning.x);
-						dst_font->kernings[{cp_from, cp_to}] = kern_value;
-					}
-				}
-			}
+                        auto kern_value = FT_CEIL(kerning.x);
+                        dst_font->kernings[{cp_from, cp_to}] = kern_value;
+                    }
+                }
+            }
 
             dst_font->add_glyph(font_wchar(src_glyph.codepoint), x0 + char_off_x, y0 + font_off_y, x1 + char_off_x, y1 + font_off_y, u0, v0, u1, v1,
                                 char_advance_x_mod);
