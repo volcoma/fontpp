@@ -533,6 +533,7 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
         // Measure highest codepoints
         auto& dst_tmp = dst_tmp_array[size_t(src_tmp.dst_index)];
         src_tmp.src_ranges = cfg.glyph_ranges ? cfg.glyph_ranges : get_glyph_ranges_default();
+
         for(const font_wchar* src_range = src_tmp.src_ranges; src_range[0] && src_range[1]; src_range += 2)
             src_tmp.glyphs_highest = std::max(src_tmp.glyphs_highest, int(src_range[1]));
         dst_tmp.src_count++;
@@ -698,6 +699,7 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
 
     if(atlas->tex_width == 0 || atlas->tex_height == 0)
     {
+        err = "No glyphs were loaded.";
         return false;
     }
 
@@ -846,14 +848,6 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
             dst_font->add_glyph(font_wchar(src_glyph.codepoint), x0 + char_off_x, y0 + font_off_y, x1 + char_off_x, y1 + font_off_y, u0, v0, u1, v1,
                                 char_advance_x_mod);
 
-//            if(font_wchar(src_glyph.codepoint) == 'x')
-//            {
-//                dst_font->x_height = -ft_y0;
-//            }
-//            if(font_wchar(src_glyph.codepoint) == 'H')
-//            {
-//                dst_font->cap_height = -ft_y0;
-//            }
         }
 
         src_tmp.rects = nullptr;

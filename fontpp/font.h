@@ -186,6 +186,7 @@ const font_wchar* get_glyph_ranges_cyrillic();
 const font_wchar* get_glyph_ranges_thai();
 // Default + Vietname characters
 const font_wchar* get_glyph_ranges_vietnamese();
+const font_wchar* get_glyph_ranges_all();
 
 int text_char_from_utf8(unsigned int* out_char, const char* in_text, const char* in_text_end);
 

@@ -1,3 +1,4 @@
+
 #include "font.h"
 #include "freetype/freetype.h"
 #include "stb/stb.h"
@@ -13,93 +14,6 @@
 #define COL32(R, G, B, A)                                                                                    \
 	((uint32_t(A) << COL32_A_SHIFT) | (uint32_t(B) << COL32_B_SHIFT) | (uint32_t(G) << COL32_G_SHIFT) |      \
 	 (uint32_t(R) << COL32_R_SHIFT))
-
-#include <vector>
-#include <queue>
-#include <memory>
-#include <thread>
-#include <mutex>
-#include <condition_variable>
-#include <future>
-#include <functional>
-#include <stdexcept>
-
-class thread_pool
-{
-public:
-    thread_pool(size_t threads)
-        :   stop(false)
-    {
-        for(size_t i = 0;i<threads;++i)
-        {
-            workers.emplace_back(
-                [this]
-                {
-                    for(;;)
-                    {
-                        std::function<void()> task;
-
-                        {
-                            std::unique_lock<std::mutex> lock(this->queue_mutex);
-                            this->condition.wait(lock,
-                                [this]{ return this->stop || !this->tasks.empty(); });
-                            if(this->stop && this->tasks.empty())
-                                return;
-                            task = std::move(this->tasks.front());
-                            this->tasks.pop();
-                        }
-
-                        task();
-                    }
-                }
-            );
-        }
-    }
-
-    template<class F, class... Args>
-    auto enqueue(F&& f, Args&&... args)
-        -> std::future<typename std::result_of<F(Args...)>::type>
-    {
-        using return_type = typename std::result_of<F(Args...)>::type;
-
-        auto task = std::make_shared< std::packaged_task<return_type()> >(
-                std::bind(std::forward<F>(f), std::forward<Args>(args)...)
-            );
-
-        std::future<return_type> res = task->get_future();
-        {
-            std::unique_lock<std::mutex> lock(queue_mutex);
-
-            // don't allow enqueueing after stopping the pool
-            if(stop)
-                throw std::runtime_error("enqueue on stopped ThreadPool");
-
-            tasks.emplace([task](){ (*task)(); });
-        }
-        condition.notify_one();
-        return res;
-    }
-    ~thread_pool()
-    {
-        {
-            std::unique_lock<std::mutex> lock(queue_mutex);
-            stop = true;
-        }
-        condition.notify_all();
-        for(std::thread &worker: workers)
-            worker.join();
-    }
-private:
-    // need to keep track of threads so we can join them
-    std::vector< std::thread > workers;
-    // the task queue
-    std::queue< std::function<void()> > tasks;
-
-    // synchronization
-    std::mutex queue_mutex;
-    std::condition_variable condition;
-    bool stop;
-};
 
 namespace fnt
 {
@@ -187,46 +101,16 @@ void generate_sdf(uint8_t* output, const uint8_t* input, int width, int height, 
 		}
 	}
 }
-void generate_sdf_parallel(int jobs, uint8_t* output, const uint8_t* input, int width, int height, int spread)
+
+void generate_sdf_parallel(uint8_t* output, const uint8_t* input, int width, int height, int spread)
 {
-
-    bool small = width * height <= 256 * 256;
-    if(jobs == 1 || small)
+    parallel::parallel_for_2d(width, height, [&](int x, int y)
     {
-        generate_sdf(output, input, width, height, spread);
-    }
-    else
-    {
-        static thread_pool pool(32);
-        std::vector<std::future<void>> futures;
-        futures.reserve(size_t(jobs));
+        int i = y * width + x;
 
-        auto piece = height / jobs;
-        for(int j = 0; j < jobs; ++j)
-        {
-            futures.emplace_back(pool.enqueue([=]()
-            {
-                auto curr = j * piece;
-                auto next = (j + 1) * piece;
-                for(int y = curr; y < next; ++y)
-                {
-                    for(int x = 0; x < width; ++x)
-                    {
-                        int i = y * width + x;
-
-                        auto value = sample(input, width, height, x, y, spread);
-                        output[i] = uint8_t(std::round(clamp(value, 0.f, 1.f) * 255));
-                    }
-                }
-            }
-            ));
-        }
-
-        for(auto& f : futures)
-        {
-            f.wait();
-        }
-    }
+        auto value = sample(input, width, height, x, y, spread);
+        output[i] = uint8_t(std::round(clamp(value, 0.f, 1.f) * 255));
+    }, width / 4);
 }
 
 // Load file content into memory
@@ -488,25 +372,18 @@ void font_atlas::finish()
 //        {
 //            auto start = std::chrono::high_resolution_clock::now();
 //            generate_sdf(sdf.data(), tex_pixels_alpha8.data(), int(tex_width), int(tex_height), int(sdf_spread));
-
 //            auto end = std::chrono::high_resolution_clock::now();
-
 //            auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-//            std::cout << "sdf v1 generation : " << dur.count() << "ms" << std::endl;
+//            std::cout << "[  serial  ] sdf vectorization on (" << tex_width << "x" << tex_height << ") took : " << dur.count() << "ms" << std::endl;
 //        }
-
-//        for(int i = 0; i < 20; ++i)
         {
-//            auto jobs = 4 * (i + 1);
-            auto jobs = 8;
             auto start = std::chrono::high_resolution_clock::now();
-            generate_sdf_parallel(jobs, sdf.data(), tex_pixels_alpha8.data(), int(tex_width), int(tex_height), int(sdf_spread));
-
+            generate_sdf_parallel(sdf.data(), tex_pixels_alpha8.data(), int(tex_width), int(tex_height), int(sdf_spread));
             auto end = std::chrono::high_resolution_clock::now();
-
             auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-            std::cout << "sdf vectorization on w:" << tex_width << ", h:" << tex_height << ", j:" << jobs << ", generation : " << dur.count() << "ms" << std::endl;
+            std::cout << "[ parallel ] sdf vectorization on (" << tex_width << "x" << tex_height << ") took : " << dur.count() << "ms" << std::endl;
         }
+
         tex_pixels_alpha8 = std::move(sdf);
 	}
 }
@@ -706,6 +583,15 @@ const font_wchar* get_glyph_ranges_korean()
 		0x0020, 0x00FF, // Basic Latin + Latin Supplement
 		0x3131, 0x3163, // Korean alphabets
 		0xAC00, 0xD79D, // Korean characters
+		0,
+	};
+	return &ranges[0];
+}
+
+const font_wchar* get_glyph_ranges_all()
+{
+	static const font_wchar ranges[] = {
+		0x0000, 0xFFFF,
 		0,
 	};
 	return &ranges[0];
