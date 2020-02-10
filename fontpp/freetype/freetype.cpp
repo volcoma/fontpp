@@ -304,33 +304,36 @@ void font_ft::set_pixel_height(int pixel_height)
 
 //    std::string family_name = face->family_name;
 //    std::string style_name = face->style_name;
-    if(info.xheight == 0.0f)
+    if(info.cap_height == 0.0f)
     {
-        glyph_ft x_glyph{};
-        x_glyph.codepoint = 'x';
-        auto x_metrics = load_glyph(x_glyph);
-        if(x_metrics)
+        info.cap_height = info.ascender;
+
+        for(auto codepoint : {'H', 'I'})
         {
-            info.xheight = FT_CEIL(x_metrics->height);
-        }
-        else
-        {
-            info.xheight = info.ascender * 0.5f;
+            glyph_ft glyph{};
+            glyph.codepoint = uint32_t(codepoint);
+            auto metrics = load_glyph(glyph);
+            if(metrics)
+            {
+                info.cap_height = FT_CEIL(metrics->height);
+                break;
+            }
         }
     }
 
-    if(info.cap_height == 0.0f)
+    if(info.xheight == 0.0f)
     {
-        glyph_ft h_glyph{};
-        h_glyph.codepoint = 'H';
-        auto h_metrics = load_glyph(h_glyph);
-        if(h_metrics)
+        info.xheight = info.cap_height * 0.5f;
+        for(auto codepoint : {'x', 'z'})
         {
-            info.cap_height = FT_CEIL(h_metrics->height);
-        }
-        else
-        {
-            info.cap_height = info.ascender;
+            glyph_ft glyph{};
+            glyph.codepoint = uint32_t(codepoint);
+            auto metrics = load_glyph(glyph);
+            if(metrics)
+            {
+                info.xheight = FT_CEIL(metrics->height);
+                break;
+            }
         }
     }
 }

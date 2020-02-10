@@ -343,29 +343,26 @@ bool build(font_atlas* atlas, std::string& err)
 		const float descent = std::floor(float(unscaled_descent) * font_scale);
         const float line_gap = std::floor(float(unscaled_line_gap) * font_scale);
 		const float line_height = (ascent - descent) + line_gap;
-        float x_height = 0.0f;
-        float cap_height = 0.0f;
+        float cap_height = ascent;
+
+        for(auto codepoint : {'H', 'I'})
         {
             int x0{}, x1{}, y0{}, y1{};
-            if(stbtt_GetCodepointBox(&src_tmp.font_info, 'x', &x0, &y0, &x1, &y1))
+            if(stbtt_GetCodepointBox(&src_tmp.font_info, codepoint, &x0, &y0, &x1, &y1))
             {
-                x_height = std::floor(float(y1) * font_scale);
-            }
-            else
-            {
-                x_height = ascent * 0.5f;
+                cap_height = std::floor(float(y1) * font_scale);
+                break;
             }
         }
 
+        float x_height = cap_height * 0.5f;
+        for(auto codepoint : {'x', 'z'})
         {
             int x0{}, x1{}, y0{}, y1{};
-            if(stbtt_GetCodepointBox(&src_tmp.font_info, 'H', &x0, &y0, &x1, &y1))
+            if(stbtt_GetCodepointBox(&src_tmp.font_info, codepoint, &x0, &y0, &x1, &y1))
             {
-                cap_height = std::floor(float(y1) * font_scale);
-            }
-            else
-            {
-                cap_height = ascent;
+                x_height = std::floor(float(y1) * font_scale);
+                break;
             }
         }
 
