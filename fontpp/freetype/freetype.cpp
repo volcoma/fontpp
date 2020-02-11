@@ -312,10 +312,10 @@ void font_ft::set_pixel_height(int pixel_height)
         {
             glyph_ft glyph{};
             glyph.codepoint = uint32_t(codepoint);
-            auto metrics = load_glyph(glyph);
-            if(metrics)
+            auto glyph_metrics = load_glyph(glyph);
+            if(glyph_metrics)
             {
-                info.cap_height = FT_CEIL(metrics->height);
+                info.cap_height = FT_CEIL(glyph_metrics->height);
                 break;
             }
         }
@@ -328,10 +328,10 @@ void font_ft::set_pixel_height(int pixel_height)
         {
             glyph_ft glyph{};
             glyph.codepoint = uint32_t(codepoint);
-            auto metrics = load_glyph(glyph);
-            if(metrics)
+            auto glyph_metrics = load_glyph(glyph);
+            if(glyph_metrics)
             {
-                info.xheight = FT_CEIL(metrics->height);
+                info.xheight = FT_CEIL(glyph_metrics->height);
                 break;
             }
         }

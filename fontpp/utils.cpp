@@ -3,42 +3,62 @@
 namespace parallel
 {
 
-detached_thread_pool::detached_thread_pool(size_t threads)
+thread_pool::thread_pool(size_t threads)
 {
+    condition = std::make_shared<std::condition_variable>();
     workers.reserve(threads);
     for(size_t i = 0; i < threads; ++i)
     {
-        workers.emplace_back([this] {
+        workers.emplace_back([this, condition = this->condition] {
             for(;;)
             {
-                std::function<void()> task;
+                task_t task;
 
                 {
                     std::unique_lock<std::mutex> lock(this->queue_mutex);
-                    this->condition.wait(lock, [this]
+                    this->condition->wait(lock, [this]
                     {
                         return this->stop || !this->tasks.empty();
                     });
                     if(this->stop)
+                    {
                         return;
+                    }
                     task = std::move(this->tasks.front());
                     this->tasks.pop();
                 }
 
-                task();
+                if(task)
+                {
+                    task();
+                }
             }
         });
-
-        workers.back().detach();
     }
 }
 
 
-detached_thread_pool::~detached_thread_pool() = default;
-
-detached_thread_pool& get_pool()
+thread_pool::~thread_pool()
 {
-    static detached_thread_pool pool;
+    {
+        std::unique_lock<std::mutex> lock(queue_mutex);
+        stop = true;
+    }
+
+    condition->notify_all();
+
+    for(auto& worker : workers)
+    {
+        if(worker.joinable())
+        {
+            worker.join();
+        }
+    }
+}
+
+thread_pool& get_pool()
+{
+    static thread_pool pool;
 	return pool;
 }
 
