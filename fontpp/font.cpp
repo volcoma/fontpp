@@ -341,7 +341,7 @@ bool font_atlas::build(font_rasterizer raster, std::string& err)
 {
 	if(sdf_spread > 0)
 	{
-		tex_glyph_padding += sdf_spread + 3;
+		tex_glyph_padding += sdf_spread + 4;
 	}
 
 	switch(raster)
