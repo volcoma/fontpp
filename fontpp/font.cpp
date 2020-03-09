@@ -3,6 +3,9 @@
 #include "freetype/freetype.h"
 #include "stb/stb.h"
 
+#define SDF_IMPLEMENTATION
+#include "edtaa3func.h"
+
 #include <chrono>
 #include <iostream>
 #include <future>
@@ -17,7 +20,8 @@
 
 namespace fnt
 {
-
+namespace
+{
 
 template <typename T>
 T sq(T t)
@@ -101,7 +105,8 @@ void generate_sdf(uint8_t* output, const uint8_t* input, int width, int height, 
 		}
 	}
 }
-
+// assumes input and output are big enough to NOT check bounds
+// input can be anti-aliased
 void generate_sdf_parallel(uint8_t* output, const uint8_t* input, int width, int height, int spread)
 {
     parallel::parallel_for_2d(width, height, [&](int x, int y)
@@ -112,6 +117,7 @@ void generate_sdf_parallel(uint8_t* output, const uint8_t* input, int width, int
         output[i] = uint8_t(std::round(clamp(value, 0.f, 1.f) * 255));
     });
 }
+
 
 // Load file content into memory
 // Memory allocated with std::malloc(), must be freed by user using std::free()
@@ -155,9 +161,9 @@ void* file_load_to_memory(const char* filename, const char* file_open_mode, size
 
 	return file_data;
 }
-
+}
 //-----------------------------------------------------------------------------
-// [SECTION] MISC HELPERS/UTILITIES (ImText* functions)
+// [SECTION] MISC HELPERS/UTILITIES
 //-----------------------------------------------------------------------------
 
 // Convert UTF-8 to 32-bits character, process single character input.
@@ -341,7 +347,7 @@ bool font_atlas::build(font_rasterizer raster, std::string& err)
 {
 	if(sdf_spread > 0)
 	{
-		tex_glyph_padding += sdf_spread + 4;
+		tex_glyph_padding += sdf_spread * 2 + 2;
 	}
 
 	switch(raster)
@@ -387,7 +393,22 @@ void font_atlas::finish()
             auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
             std::cout << "[mt] sdf vectorization on (" << tex_width << "x" << tex_height << ")(glyphs:" << total_glyphs << ") took : " << dur.count() << "ms" << std::endl;
         }
+//        {
+//            auto start = std::chrono::high_resolution_clock::now();
+//            sdf_build(sdf.data(), int(tex_width), sdf_spread, tex_pixels_alpha8.data(), int(tex_width), int(tex_height), int(tex_width));
+//            auto end = std::chrono::high_resolution_clock::now();
+//            auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+//            std::cout << "[st-edtaa] sdf vectorization on (" << tex_width << "x" << tex_height << ")(glyphs:" << total_glyphs << ") took : " << dur.count() << "ms" << std::endl;
+//        }
+//        {
+//            auto start = std::chrono::high_resolution_clock::now();
+//            sdf_build_parallel(sdf.data(), int(tex_width), sdf_spread, tex_pixels_alpha8.data(), int(tex_width), int(tex_height), int(tex_width));
+//            auto end = std::chrono::high_resolution_clock::now();
+//            auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+//            std::cout << "[mt-edtaa] sdf vectorization on (" << tex_width << "x" << tex_height << ")(glyphs:" << total_glyphs << ") took : " << dur.count() << "ms" << std::endl;
+//        }
 
+        std::cout << std::endl;
         tex_pixels_alpha8 = std::move(sdf);
 	}
 }
