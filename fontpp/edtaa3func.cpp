@@ -238,7 +238,6 @@ void sdf_build_no_allloc(unsigned char* out, int outstride, float radius,
             out[x+y*outstride] = (unsigned char)(sdf__clamp01(0.5f - d*0.5f) * 255.0f);
         }
     }
-
 }
 
 void sdf_build(unsigned char* out, int outstride, float radius,
@@ -250,6 +249,276 @@ void sdf_build(unsigned char* out, int outstride, float radius,
 	free(temp);
 }
 
+struct point
+{
+    int x;
+    int y;
+};
+
+struct rect
+{
+    int x;
+    int y;
+    int w;
+    int h;
+};
+
+void sdf_build_parallel_block(const rect& block, unsigned char* out, int outstride, int radius,
+                              const unsigned char* img, int width, int height, int stride)
+{
+    const bool has_left_shared_region = block.x > 0;
+    const bool has_top_shared_region = block.y + block.h < height;
+    const bool has_right_shared_region = block.x + block.w < width;
+    const bool has_bottom_shared_region = block.y > 0;
+
+
+    rect whole_block; // the block including the shared regions
+    whole_block.w = block.w + (has_left_shared_region ? radius : 0) + (has_right_shared_region ? radius : 0);
+    whole_block.h = block.h + (has_top_shared_region ? radius : 0) + (has_bottom_shared_region ? radius : 0);
+    whole_block.x = block.x - (has_left_shared_region ? radius : 0);
+    whole_block.y = block.y - (has_bottom_shared_region ? radius : 0);
+
+    const auto block_total_cells = static_cast<size_t>(whole_block.w) * static_cast<size_t>(whole_block.h);
+
+    auto* temp = reinterpret_cast<uint8_t*>(malloc(block_total_cells * sizeof(float) * 3)); // Huge block, might be no such continous free block in the memory...
+    if(!temp)
+    {
+        return;
+    }
+
+    auto tdist = reinterpret_cast<float*>(&temp[0]);
+    auto tpt = reinterpret_cast<struct SDFpoint*>(&temp[block_total_cells * sizeof(float)]);
+
+    // Initialize buffers
+    for (size_t i = 0; i < block_total_cells; i++)
+    {
+        tpt[i].x = 0;
+        tpt[i].y = 0;
+        tdist[i] = SDF_BIG;
+    }
+
+    // Calculate position of the anti-aliased pixels and distance to the boundary of the shape.
+    for (auto y = 1; y < whole_block.h - 1; y++)
+    {
+        for (auto x = 1; x < whole_block.w - 1; x++)
+        {
+            auto original_x = x + whole_block.x;
+            auto original_y = y + whole_block.y;
+
+            int tk, k = original_x + original_y * stride;
+            struct SDFpoint c = { (float)x, (float)y }; // TODO: is this correct?
+            float d, gx, gy, glen;
+
+            // Skip flat areas.
+            if (img[k] == 255) continue;
+            if (img[k] == 0) {
+                // Special handling for cases where full opaque pixels are next to full transparent pixels.
+                // See: https://github.com/memononen/SDF/issues/2
+                int he = img[k-1] == 255 || img[k+1] == 255;
+                int ve = img[k-stride] == 255 || img[k+stride] == 255;
+                if (!he && !ve) continue;
+            }
+
+            // Calculate gradient direction
+            gx = -(float)img[k-stride-1] - SDF_SQRT2*(float)img[k-1] - (float)img[k+stride-1] + (float)img[k-stride+1] + SDF_SQRT2*(float)img[k+1] + (float)img[k+stride+1];
+            gy = -(float)img[k-stride-1] - SDF_SQRT2*(float)img[k-stride] - (float)img[k-stride+1] + (float)img[k+stride-1] + SDF_SQRT2*(float)img[k+stride] + (float)img[k+stride+1];
+            if (fabsf(gx) < 0.001f && fabsf(gy) < 0.001f) continue;
+            glen = gx*gx + gy*gy;
+            if (glen > 0.0001f) {
+                glen = 1.0f / sqrtf(glen);
+                gx *= glen;
+                gy *= glen;
+            }
+
+            // Find nearest point on contour.
+            tk = x + y * whole_block.w;
+            d = sdf__edgedf(gx, gy, (float)img[k]/255.0f);
+            tpt[tk].x = x + gx*d;
+            tpt[tk].y = y + gy*d;
+            tdist[tk] = sdf__distsqr(&c, &tpt[tk]);
+        }
+    }
+
+    // Calculate distance transform using sweep-and-update.
+    for (auto pass = 0; pass < SDF_MAX_PASSES; pass++){
+        int changed = 0;
+
+        // Bottom-left to top-right.
+        for (auto y = 1; y < whole_block.h - 1; y++)
+        {
+            for (auto x = 1; x < whole_block.w - 1; x++)
+            {
+                int k = x + y * whole_block.w, kn, ch = 0;
+                struct SDFpoint c = { (float)x, (float)y }, pt;
+                float pd = tdist[k], d;
+                // (-1,-1)
+                kn = k - 1 - whole_block.w;
+                if (tdist[kn] < pd) {
+                    d = sdf__distsqr(&c, &tpt[kn]);
+                    if (d + SDF_SLACK < pd) {
+                        pt = tpt[kn];
+                        pd = d;
+                        ch = 1;
+                    }
+                }
+                // (0,-1)
+                kn = k - whole_block.w;
+                if (tdist[kn] < pd) {
+                    d = sdf__distsqr(&c, &tpt[kn]);
+                    if (d + SDF_SLACK < pd) {
+                        pt = tpt[kn];
+                        pd = d;
+                        ch = 1;
+                    }
+                }
+                // (1,-1)
+                kn = k + 1 - whole_block.w;
+                if (tdist[kn] < pd) {
+                    d = sdf__distsqr(&c, &tpt[kn]);
+                    if (d + SDF_SLACK < pd) {
+                        pt = tpt[kn];
+                        pd = d;
+                        ch = 1;
+                    }
+                }
+                // (-1,0)
+                kn = k - 1;
+                if (tdist[kn] < pd) {
+                    d = sdf__distsqr(&c, &tpt[kn]);
+                    if (d + SDF_SLACK < pd) {
+                        pt = tpt[kn];
+                        pd = d;
+                        ch = 1;
+                    }
+                }
+                if (ch) {
+                    tpt[k] = pt;
+                    tdist[k] = pd;
+                    changed++;
+                }
+            }
+        }
+
+        // Top-right to bottom-left.
+        for (auto y = whole_block.h - 2; y > 0 ; --y)
+        {
+            for (auto x = whole_block.w - 2; x > 0; --x)
+            {
+                int k = x+y*whole_block.w, kn, ch = 0;
+                struct SDFpoint c = { (float)x, (float)y }, pt;
+                float pd = tdist[k], d;
+                // (1,0)
+                kn = k + 1;
+                if (tdist[kn] < pd) {
+                    d = sdf__distsqr(&c, &tpt[kn]);
+                    if (d + SDF_SLACK < pd) {
+                        pt = tpt[kn];
+                        pd = d;
+                        ch = 1;
+                    }
+                }
+                // (-1,1)
+                kn = k - 1 + whole_block.w;
+                if (tdist[kn] < pd) {
+                    d = sdf__distsqr(&c, &tpt[kn]);
+                    if (d + SDF_SLACK < pd) {
+                        pt = tpt[kn];
+                        pd = d;
+                        ch = 1;
+                    }
+                }
+                // (0,1)
+                kn = k + whole_block.w;
+                if (tdist[kn] < pd) {
+                    d = sdf__distsqr(&c, &tpt[kn]);
+                    if (d + SDF_SLACK < pd) {
+                        pt = tpt[kn];
+                        pd = d;
+                        ch = 1;
+                    }
+                }
+                // (1,1)
+                kn = k + 1 + whole_block.w;
+                if (tdist[kn] < pd) {
+                    d = sdf__distsqr(&c, &tpt[kn]);
+                    if (d + SDF_SLACK < pd) {
+                        pt = tpt[kn];
+                        pd = d;
+                        ch = 1;
+                    }
+                }
+                if (ch) {
+                    tpt[k] = pt;
+                    tdist[k] = pd;
+                    changed++;
+                }
+            }
+        }
+
+        if (changed == 0) break;
+    }
+
+    // Map to good range.
+    const float scale = 1.0f / radius;
+
+    // Write the calculated distances
+    for (auto y = (has_bottom_shared_region ? radius : 0),
+              bound_y = whole_block.h - (has_top_shared_region ? radius : 0);
+         y < bound_y; ++y)
+    {
+        for (auto x = (has_left_shared_region ? radius : 0),
+                  bound_x = whole_block.w - (has_right_shared_region ? radius : 0);
+             x < bound_x; ++x)
+        {
+            auto original_x = x + whole_block.x;
+            auto original_y = y + whole_block.y;
+
+            float d = sqrtf(tdist[x+y*whole_block.w]) * scale;
+            if (img[original_x + original_y * stride] > 127) d = -d;
+            out[original_x + original_y * outstride] = (unsigned char)(sdf__clamp01(0.5f - d*0.5f) * 255.0f);
+        }
+    }
+
+    free(temp);
+}
+
+void sdf_build_parallel_2(unsigned char* out, int outstride, int radius,
+                        const unsigned char* img, int width, int height, int stride)
+{
+    using namespace parallel;
+
+    const auto hint = static_cast<int>(std::thread::hardware_concurrency());
+    const int jobs = std::min(width * height, (hint == 0) ? 4 : hint); // why hardware concurrency 0 gives 4 jobs???
+
+    // TODO: devide the rectangle into a grid of rects(multiple columns and rows, instead of just one column as it is now).
+    // It will reduce the "shared" regions between the blocks, which are calculated/allocated per neighbour block.
+    // The shared region is with size @radius over the shared length.
+    int block_height = height / jobs;
+    int last_block_height = height % jobs;
+
+    auto inner_loop = [=](const int thread_index)
+    {
+        rect block;
+        block.x = 0;
+        block.y = thread_index * block_height;
+        block.w = width;
+        block.h = (thread_index == jobs - 1) ? last_block_height : block_height;
+
+        sdf_build_parallel_block(block, out, outstride, radius, img, width, height, stride);
+    };
+
+    std::vector<std::future<void>> futures;
+    futures.reserve(size_t(jobs));
+    for(int j = 0; j < jobs; ++j)
+    {
+        futures.emplace_back(get_pool().enqueue(inner_loop, j));
+//		futures.emplace_back(std::async(std::launch::async, inner_loop, j));
+    }
+    for(auto& t : futures)
+    {
+        t.wait();
+    }
+}
 
 void sdf_build_no_allloc_parallel(unsigned char* out, int outstride, float radius,
 					 const unsigned char* img, int width, int height, int stride,
@@ -311,6 +580,7 @@ void sdf_build_no_allloc_parallel(unsigned char* out, int outstride, float radiu
     for (pass = 0; pass < SDF_MAX_PASSES; pass++){
         int changed = 0;
 
+        // Imagine coordinate system with (0,0) at the bottom left corner
         // Bottom-left to top-right.
         for (y = 1; y < height-1; y++) {
             for (x = 1; x < width-1; x++) {

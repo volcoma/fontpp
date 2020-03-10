@@ -46,6 +46,8 @@ void sdf_build(unsigned char* out, int outstride, float radius,
 			 const unsigned char* img, int width, int height, int stride);
 void sdf_build_parallel(unsigned char* out, int outstride, float radius,
 			 const unsigned char* img, int width, int height, int stride);
+void sdf_build_parallel_2(unsigned char* out, int outstride, int radius,
+             const unsigned char* img, int width, int height, int stride);
 
 // Same as distXform, but does not allocate any memory.
 // The 'temp' array should be enough to fit width * height * sizeof(float) bytes.
