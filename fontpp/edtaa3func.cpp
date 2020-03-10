@@ -3,7 +3,7 @@
 
 #include <cmath>
 #include <cstdlib>
-
+#include <cfloat>
 #define SDF_MAX_PASSES 1		// Maximum number of distance transform passes
 #define SDF_SLACK 0.001f		// Controls how much smaller the neighbour value must be to cosnider, too small slack increse iteration count.
 #define SDF_SQRT2 1.4142136f	// sqrt(2)

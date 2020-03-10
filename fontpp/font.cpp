@@ -24,7 +24,7 @@ namespace
 {
 
 template <typename T>
-T sq(T t)
+inline T sq(T t)
 {
 	return t * t;
 }
@@ -40,26 +40,17 @@ float sample(const uint8_t* input, int width, int height, int x, int y, int spre
 
 	const float inv255 = 1.0f / 255.0f;
 
-	int32_t startx = x - spread;
-	if(startx < 0)
-		startx = 0;
-	int32_t endx = x + spread + 1;
-	if(endx > width)
-		endx = width;
+    int startx = std::max<int>(0, x - spread);
+    int endx = std::min<int>(width - 1, x + spread);
+    int starty = std::max<int>(0, y - spread);
+    int endy = std::min<int>(height - 1, y + spread);
 
-	int32_t starty = y - spread;
-	if(starty < 0)
-		starty = 0;
-	int32_t endy = y + spread + 1;
-	if(endy > height)
-		endy = height;
-
-	for(int32_t cy = starty, offsety = starty - y; cy < endy; ++cy, ++offsety)
+	for(int cy = starty, offsety = starty - y; cy < endy; ++cy, ++offsety)
 	{
 		int offset = cy * width;
 		int offsety_sq = sq(offsety);
 
-		for(int32_t cx = startx, offsetx = startx - x; cx < endx; ++cx, ++offsetx)
+		for(int cx = startx, offsetx = startx - x; cx < endx; ++cx, ++offsetx)
 		{
 			int i = offset + cx;
 			uint8_t sample_int = input[i];
@@ -117,7 +108,6 @@ void generate_sdf_parallel(uint8_t* output, const uint8_t* input, int width, int
         output[i] = uint8_t(std::round(clamp(value, 0.f, 1.f) * 255));
     });
 }
-
 
 // Load file content into memory
 // Memory allocated with std::malloc(), must be freed by user using std::free()
@@ -386,12 +376,13 @@ void font_atlas::finish()
 //            auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 //            std::cout << "[st] sdf vectorization on (" << tex_width << "x" << tex_height << ")(glyphs:" << total_glyphs << ") took : " << dur.count() << "ms" << std::endl;
 //        }
+
         {
             auto start = std::chrono::high_resolution_clock::now();
             generate_sdf_parallel(sdf.data(), tex_pixels_alpha8.data(), int(tex_width), int(tex_height), int(sdf_spread));
             auto end = std::chrono::high_resolution_clock::now();
             auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-            std::cout << "[mt] sdf vectorization on (" << tex_width << "x" << tex_height << ")(glyphs:" << total_glyphs << ") took : " << dur.count() << "ms" << std::endl;
+            std::cout << "[mt-sqrt] sdf vectorization on (" << tex_width << "x" << tex_height << ")(glyphs:" << total_glyphs << ") took : " << dur.count() << "ms" << std::endl;
         }
 //        {
 //            auto start = std::chrono::high_resolution_clock::now();
