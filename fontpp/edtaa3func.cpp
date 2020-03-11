@@ -270,8 +270,7 @@ void sdf_build_parallel_block(const rect& block, unsigned char* out, int outstri
     const bool has_right_shared_region = block.x + block.w < width;
     const bool has_bottom_shared_region = block.y > 0;
 
-
-    const int shared_region = 1;
+    const auto shared_region = static_cast<int>(radius);
     rect whole_block; // the block including the shared regions
     whole_block.w = block.w + (has_left_shared_region ? shared_region : 0) + (has_right_shared_region ? shared_region : 0);
     whole_block.h = block.h + (has_top_shared_region ? shared_region : 0) + (has_bottom_shared_region ? shared_region : 0);
@@ -292,8 +291,8 @@ void sdf_build_parallel_block(const rect& block, unsigned char* out, int outstri
     // Initialize buffers
     for (size_t i = 0; i < block_total_cells; i++)
     {
-        tpt[i].x = 0;
-        tpt[i].y = 0;
+        tpt[i].x = 0.f;
+        tpt[i].y = 0.f;
         tdist[i] = SDF_BIG;
     }
 
@@ -462,34 +461,26 @@ void sdf_build_parallel_block(const rect& block, unsigned char* out, int outstri
     const float scale = 1.0f / radius;
 
     // Write the calculated distances
-    auto ystart = (has_bottom_shared_region ? shared_region : 0);
-    auto yend = whole_block.h - (has_top_shared_region ? shared_region : 0);
-
-    auto xend = whole_block.w - (has_right_shared_region ? shared_region : 0);
-    auto xstart = (has_left_shared_region ? shared_region : 0);
-    for (auto y = ystart; y < yend; ++y)
+    for (auto y = block.y, endy = block.y + block.h; y < endy; ++y)
     {
-        for (auto x = xstart; x < xend; ++x)
+        for (auto x = block.x, endx = block.x + block.w; x < endx; ++x)
         {
-            auto original_x = x + whole_block.x;
-            auto original_y = y + whole_block.y;
-
-            float d = sqrtf(tdist[x+y*whole_block.w]) * scale;
-            if (img[original_x + original_y * stride] > 127) d = -d;
-            out[original_x + original_y * outstride] = (unsigned char)(sdf__clamp01(0.5f - d*0.5f) * 255.0f);
+            const auto whole_block_x = x - block.x + (has_left_shared_region ? shared_region : 0);
+            const auto whole_block_y = y - block.y + (has_bottom_shared_region ? shared_region : 0);
+            float d = sqrtf(tdist[whole_block_x + whole_block_y * whole_block.w]) * scale;
+            if (img[x + y * stride] > 127) d = -d;
+            out[x + y * outstride] = (unsigned char)(sdf__clamp01(0.5f - d*0.5f) * 255.0f);
         }
     }
 
-//    for (auto y = block.y; y < block.h; ++y)
+    // DEBUG. override white border on bottom left edge
+//    for (auto x = block.x, y = block.y, endy = block.y + block.h; y < endy; ++y)
 //    {
-//        for (auto x = block.x; x < block.w; ++x)
-//        {
-//            int block_x = x - block.x; ??
-//            int block_y = y - block.y; ??
-//            float d = sqrtf(tdist[block_x+block_y*whole_block.w]) * scale;
-//            if (img[x + y * stride] > 127) d = -d;
-//            out[x + y * outstride] = (unsigned char)(sdf__clamp01(0.5f - d*0.5f) * 255.0f);
-//        }
+//        out[x + y * outstride] = 255;
+//    }
+//    for (auto k = block.y * outstride + block.x, endk = k + block.w; k < endk; ++k)
+//    {
+//        out[k] = 255;
 //    }
 
     free(temp);
@@ -507,7 +498,7 @@ void sdf_build_parallel(unsigned char* out, int outstride, float radius,
     // It will reduce the "shared" regions between the blocks, which are calculated/allocated per neighbour block.
     // The shared region is with size @radius over the shared length.
     int block_height = height / jobs;
-    int last_block_height = height % jobs;
+    int last_block_height = height % jobs == 0 ? block_height : height % jobs;
 
     auto inner_loop = [=](const int thread_index)
     {
