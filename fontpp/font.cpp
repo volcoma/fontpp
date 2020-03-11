@@ -369,20 +369,20 @@ void font_atlas::finish()
 	{
 		std::vector<uint8_t> sdf(tex_pixels_alpha8.size());
 
-        {
-            auto start = std::chrono::high_resolution_clock::now();
-            generate_sdf_parallel(sdf.data(), tex_pixels_alpha8.data(), int(tex_width), int(tex_height), int(sdf_spread));
-            auto end = std::chrono::high_resolution_clock::now();
-            auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-            std::cout << "[mt] sdf vectorization on (" << tex_width << "x" << tex_height << ")(glyphs:" << total_glyphs << ") took : " << dur.count() << "ms" << std::endl;
-        }
-        {
-            auto start = std::chrono::high_resolution_clock::now();
-            sdf_build(sdf.data(), int(tex_width), sdf_spread, tex_pixels_alpha8.data(), int(tex_width), int(tex_height), int(tex_width));
-            auto end = std::chrono::high_resolution_clock::now();
-            auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-            std::cout << "[st-edtaa] sdf vectorization on (" << tex_width << "x" << tex_height << ")(glyphs:" << total_glyphs << ") took : " << dur.count() << "ms" << std::endl;
-        }
+//        {
+//            auto start = std::chrono::high_resolution_clock::now();
+//            generate_sdf_parallel(sdf.data(), tex_pixels_alpha8.data(), int(tex_width), int(tex_height), int(sdf_spread));
+//            auto end = std::chrono::high_resolution_clock::now();
+//            auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+//            std::cout << "[mt] sdf vectorization on (" << tex_width << "x" << tex_height << ")(glyphs:" << total_glyphs << ") took : " << dur.count() << "ms" << std::endl;
+//        }
+//        {
+//            auto start = std::chrono::high_resolution_clock::now();
+//            sdf_build(sdf.data(), int(tex_width), sdf_spread, tex_pixels_alpha8.data(), int(tex_width), int(tex_height), int(tex_width));
+//            auto end = std::chrono::high_resolution_clock::now();
+//            auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+//            std::cout << "[st-edtaa] sdf vectorization on (" << tex_width << "x" << tex_height << ")(glyphs:" << total_glyphs << ") took : " << dur.count() << "ms" << std::endl;
+//        }
 
         {
             auto start = std::chrono::high_resolution_clock::now();
@@ -392,23 +392,23 @@ void font_atlas::finish()
             std::cout << "[mt-edtaa] sdf vectorization on (" << tex_width << "x" << tex_height << ")(glyphs:" << total_glyphs << ") took : " << dur.count() << "ms" << std::endl;
         }
 
-/*
-[mt] sdf vectorization on (256x256)(glyphs:224) took : 1ms
-[st-edtaa] sdf vectorization on (256x256)(glyphs:224) took : 2ms
-[mt-edtaa] sdf vectorization on (256x256)(glyphs:224) took : 0ms
 
-[mt] sdf vectorization on (8192x8192)(glyphs:5367) took : 9842ms
-[st-edtaa] sdf vectorization on (8192x8192)(glyphs:5367) took : 1565ms
-[mt-edtaa] sdf vectorization on (8192x8192)(glyphs:5367) took : 341ms
+// [mt] sdf vectorization on (256x256)(glyphs:224) took : 1ms
+// [st-edtaa] sdf vectorization on (256x256)(glyphs:224) took : 2ms
+// [mt-edtaa] sdf vectorization on (256x256)(glyphs:224) took : 0ms
+//
+// [mt] sdf vectorization on (8192x8192)(glyphs:5367) took : 9842ms
+// [st-edtaa] sdf vectorization on (8192x8192)(glyphs:5367) took : 1565ms
+// [mt-edtaa] sdf vectorization on (8192x8192)(glyphs:5367) took : 341ms
+//
+// [mt] sdf vectorization on (8192x8192)(glyphs:5367) took : 8707ms
+// [st-edtaa] sdf vectorization on (8192x8192)(glyphs:5367) took : 1608ms
+// [mt-edtaa] sdf vectorization on (8192x8192)(glyphs:5367) took : 337ms
+//
+// [mt] sdf vectorization on (8192x8192)(glyphs:3326) took : 9097ms
+// [st-edtaa] sdf vectorization on (8192x8192)(glyphs:3326) took : 1485ms
+// [mt-edtaa] sdf vectorization on (8192x8192)(glyphs:3326) took : 335ms
 
-[mt] sdf vectorization on (8192x8192)(glyphs:5367) took : 8707ms
-[st-edtaa] sdf vectorization on (8192x8192)(glyphs:5367) took : 1608ms
-[mt-edtaa] sdf vectorization on (8192x8192)(glyphs:5367) took : 337ms
-
-[mt] sdf vectorization on (8192x8192)(glyphs:3326) took : 9097ms
-[st-edtaa] sdf vectorization on (8192x8192)(glyphs:3326) took : 1485ms
-[mt-edtaa] sdf vectorization on (8192x8192)(glyphs:3326) took : 335ms
-*/
 
         std::cout << std::endl;
         tex_pixels_alpha8 = std::move(sdf);

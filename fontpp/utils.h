@@ -45,6 +45,10 @@ inline uint32_t estimate_width(uint32_t max, uint32_t min, uint32_t surface_sqrt
 
 		width /= 2;
 	}
+    if(min > width)
+    {
+        width *= 2;
+    }
 	return width;
 }
 

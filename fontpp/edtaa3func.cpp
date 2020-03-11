@@ -62,10 +62,11 @@ float sdf__clamp01(float x)
 }
 }
 
-void sdf_build_no_allloc(unsigned char* out, int outstride, float radius,
-					 const unsigned char* img, int width, int height, int stride,
-					 unsigned char* temp)
+void sdf_build(unsigned char* out, int outstride, float radius,
+					 const unsigned char* img, int width, int height, int stride)
 {
+    unsigned char* temp = (unsigned char*)malloc(width*height*sizeof(float)*3);
+
     int i, x, y, pass;
     float* tdist = (float*)&temp[0];
     struct SDFpoint* tpt = (struct SDFpoint*)&temp[width * height * sizeof(float)];
@@ -237,15 +238,8 @@ void sdf_build_no_allloc(unsigned char* out, int outstride, float radius,
             out[x+y*outstride] = (unsigned char)(sdf__clamp01(0.5f - d*0.5f) * 255.0f);
         }
     }
-}
 
-void sdf_build(unsigned char* out, int outstride, float radius,
-			 const unsigned char* img, int width, int height, int stride)
-{
-	unsigned char* temp = (unsigned char*)malloc(width*height*sizeof(float)*3);
-	if (temp == NULL) return;
-	sdf_build_no_allloc(out, outstride, radius, img, width, height, stride, temp);
-	free(temp);
+    free(temp);
 }
 
 struct point

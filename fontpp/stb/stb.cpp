@@ -188,6 +188,8 @@ bool build(font_atlas* atlas, std::string& err)
 	size_t total_surface = 0;
 	size_t buf_rects_out_n = 0;
 	size_t buf_packedchars_out_n = 0;
+    uint32_t max_rect_w = 0;
+
 	for(size_t src_i = 0; src_i < src_tmp_array.size(); src_i++)
 	{
 		auto& src_tmp = src_tmp_array[src_i];
@@ -225,6 +227,8 @@ bool build(font_atlas* atlas, std::string& err)
 											scale * cfg.oversample_v, 0, 0, &x0, &y0, &x1, &y1);
 			src_tmp.rects[glyph_i].w = stbrp_coord(x1 - x0 + padding + cfg.oversample_h - 1);
 			src_tmp.rects[glyph_i].h = stbrp_coord(y1 - y0 + padding + cfg.oversample_v - 1);
+
+            max_rect_w = std::max(max_rect_w, uint32_t(src_tmp.rects[glyph_i].w) + padding);
 			total_surface += src_tmp.rects[glyph_i].w * src_tmp.rects[glyph_i].h;
 		}
 	}
@@ -236,7 +240,7 @@ bool build(font_atlas* atlas, std::string& err)
 	// wish, otherwise we use a simple heuristic to select the width based on expected surface.
 	const auto surface_sqrt = uint32_t(std::sqrt(total_surface)) + 1;
 	atlas->tex_height = 0;
-	atlas->tex_width = estimate_width(tex_max, 256, surface_sqrt);
+	atlas->tex_width = estimate_width(tex_max, std::max(uint32_t(256), max_rect_w), surface_sqrt);
 
 	// 5. Start packing
 	// Pack our extra data rectangles first, so it will be on the upper-left corner of our texture (UV will
@@ -271,7 +275,7 @@ bool build(font_atlas* atlas, std::string& err)
 
 	if(atlas->tex_width == 0 || atlas->tex_height == 0)
 	{
-		err = "Could not allocate texture.";
+        err = "No glyphs were loaded.";
 		return false;
 	}
 
