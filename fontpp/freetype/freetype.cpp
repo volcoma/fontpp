@@ -765,8 +765,8 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
 
             //assert(info.width + padding <= pack_rect.w);
             //assert(info.height + padding <= pack_rect.h);
-            const int tx = pack_rect.x + padding;
-            const int ty = pack_rect.y + padding;
+            const int tx = pack_rect.x + padding / 2;
+            const int ty = pack_rect.y + padding / 2;
 
             // Blit from temporary buffer to final texture
             auto blit_src_stride = size_t(src_glyph.info.width);
