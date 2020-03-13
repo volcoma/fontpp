@@ -23,6 +23,15 @@
 
 #ifndef SDF_H
 #define SDF_H
+
+#include <cstdint>
+
+// assumes input and output are big enough to NOT check bounds
+// input can be anti-aliased
+void brute_force_sdf(uint8_t* output, const uint8_t* input, int width, int height, int spread);
+void brute_force_sdf_parallel(uint8_t* output, const uint8_t* input, int width, int height, int spread);
+
+
 // Sweep-and-update Euclidean distance transform of an antialised image for contour textures.
 // Based on edtaa3func.c by Stefan Gustavson.
 //
@@ -42,10 +51,10 @@
 //   width - Width of the image.
 //   height - Height of the image.
 //   stride - Bytes per row on input image.
-void sdf_build(unsigned char* out, int outstride, float radius,
-			 const unsigned char* img, int width, int height, int stride);
-void sdf_build_parallel(unsigned char* out, int outstride, float radius,
-			 const unsigned char* img, int width, int height, int stride);
-
+//   max_allowed_memory_usage_hint - Desired memory usage in bytes only @parallel=true. Minimal is 3KB * sizeof(float).
+void sweep_and_update_sdf(unsigned char* out, int outstride, float radius,
+             const unsigned char* img, int width, int height, int stride,
+             bool parallel = true,
+             int max_allowed_memory_usage_hint = 1024 * 1024 * 2 * (sizeof(float) * 3));
 
 #endif //SDF_H

@@ -4,7 +4,7 @@
 #include "stb/stb.h"
 
 #define SDF_IMPLEMENTATION
-#include "edtaa3func.h"
+#include "sdf.h"
 
 #include <chrono>
 #include <iostream>
@@ -22,92 +22,6 @@ namespace fnt
 {
 namespace
 {
-
-template <typename T>
-inline T sq(T t)
-{
-	return t * t;
-}
-
-float sample(const uint8_t* input, int width, int height, int x, int y, int spread)
-{
-	const auto lim = float(spread + 1);
-	const auto lim_sq = sq(lim);
-	const float dist_lim = std::sqrt(2 * lim_sq);
-
-	float min_dist_to_pos = dist_lim;
-	float min_dist_to_neg = dist_lim;
-
-	const float inv255 = 1.0f / 255.0f;
-
-    int startx = std::max<int>(0, x - spread);
-    int endx = std::min<int>(width - 1, x + spread);
-    int starty = std::max<int>(0, y - spread);
-    int endy = std::min<int>(height - 1, y + spread);
-
-	for(int cy = starty, offsety = starty - y; cy < endy; ++cy, ++offsety)
-	{
-		int offset = cy * width;
-		int offsety_sq = sq(offsety);
-
-		for(int cx = startx, offsetx = startx - x; cx < endx; ++cx, ++offsetx)
-		{
-			int i = offset + cx;
-			uint8_t sample_int = input[i];
-
-			// (sample-0.5) to support anti-aliased input
-			float sample = float(sample_int) * inv255 - 0.5f;
-
-			// eventually move to precalculated sqrt table?
-			float dist = std::sqrt(float(sq(offsetx) + offsety_sq));
-
-			if(sample_int > 0)
-			{
-				min_dist_to_pos = std::min(min_dist_to_pos, dist - sample);
-			}
-			if(sample_int < 255)
-			{
-				min_dist_to_neg = std::min(min_dist_to_neg, dist + sample);
-			}
-		}
-	}
-
-	assert(min_dist_to_pos >= 0 || min_dist_to_neg >= 0); // bad input
-
-	const float inv_lim_half = 0.5f / lim;
-	if(min_dist_to_pos > min_dist_to_neg)
-	{
-		return (0.5f - min_dist_to_pos * inv_lim_half);
-	}
-	return (0.5f + min_dist_to_neg * inv_lim_half);
-}
-
-// assumes input and output are big enough to NOT check bounds
-// input can be anti-aliased
-void generate_sdf(uint8_t* output, const uint8_t* input, int width, int height, int spread)
-{
-	for(int y = 0; y < height; ++y)
-	{
-		for(int x = 0; x < width; ++x)
-		{
-			int i = y * width + x;
-			auto value = sample(input, width, height, x, y, spread);
-			output[i] = uint8_t(std::round(clamp(value, 0.f, 1.f) * 255));
-		}
-	}
-}
-// assumes input and output are big enough to NOT check bounds
-// input can be anti-aliased
-void generate_sdf_parallel(uint8_t* output, const uint8_t* input, int width, int height, int spread)
-{
-    parallel::parallel_for_2d(width, height, [&](int x, int y)
-    {
-        int i = y * width + x;
-
-        auto value = sample(input, width, height, x, y, spread);
-        output[i] = uint8_t(std::round(clamp(value, 0.f, 1.f) * 255));
-    });
-}
 
 // Load file content into memory
 // Memory allocated with std::malloc(), must be freed by user using std::free()
@@ -371,14 +285,14 @@ void font_atlas::finish()
 
 //        {
 //            auto start = std::chrono::high_resolution_clock::now();
-//            generate_sdf_parallel(sdf.data(), tex_pixels_alpha8.data(), int(tex_width), int(tex_height), int(sdf_spread));
+//            brute_force_sdf_parallel(sdf.data(), tex_pixels_alpha8.data(), int(tex_width), int(tex_height), int(sdf_spread));
 //            auto end = std::chrono::high_resolution_clock::now();
 //            auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 //            std::cout << "[mt] sdf vectorization on (" << tex_width << "x" << tex_height << ")(glyphs:" << total_glyphs << ") took : " << dur.count() << "ms" << std::endl;
 //        }
 //        {
 //            auto start = std::chrono::high_resolution_clock::now();
-//            sdf_build(sdf.data(), int(tex_width), sdf_spread, tex_pixels_alpha8.data(), int(tex_width), int(tex_height), int(tex_width));
+//            sweep_and_update_sdf(sdf.data(), int(tex_width), sdf_spread, tex_pixels_alpha8.data(), int(tex_width), int(tex_height), int(tex_width), false);
 //            auto end = std::chrono::high_resolution_clock::now();
 //            auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 //            std::cout << "[st-edtaa] sdf vectorization on (" << tex_width << "x" << tex_height << ")(glyphs:" << total_glyphs << ") took : " << dur.count() << "ms" << std::endl;
@@ -386,7 +300,7 @@ void font_atlas::finish()
 
         {
             auto start = std::chrono::high_resolution_clock::now();
-            sdf_build_parallel(sdf.data(), int(tex_width), sdf_spread, tex_pixels_alpha8.data(), int(tex_width), int(tex_height), int(tex_width));
+            sweep_and_update_sdf(sdf.data(), int(tex_width), sdf_spread, tex_pixels_alpha8.data(), int(tex_width), int(tex_height), int(tex_width));
             auto end = std::chrono::high_resolution_clock::now();
             auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
             std::cout << "[mt-edtaa] sdf vectorization on (" << tex_width << "x" << tex_height << ")(glyphs:" << total_glyphs << ") took : " << dur.count() << "ms" << std::endl;
