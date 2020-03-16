@@ -292,12 +292,20 @@ bool build(font_atlas* atlas, std::string& err)
 	spc.height = int(atlas->tex_height);
 
 	// 8. Render/rasterize font characters into the texture
-	for(size_t src_i = 0; src_i < src_tmp_array.size(); src_i++)
-	{
-		auto& cfg = atlas->config_data[src_i];
-		auto& src_tmp = src_tmp_array[src_i];
-		if(src_tmp.glyphs_count == 0)
-			continue;
+    const auto half_padding = int(atlas->tex_glyph_padding) / 2;
+    for(size_t src_i = 0; src_i < src_tmp_array.size(); src_i++)
+    {
+        auto& cfg = atlas->config_data[src_i];
+        auto& src_tmp = src_tmp_array[src_i];
+        if(src_tmp.glyphs_count == 0)
+            continue;
+
+        for(int glyph_i = 0; glyph_i < src_tmp.glyphs_count; glyph_i++)
+        {
+            auto& pack_rect = src_tmp.rects[size_t(glyph_i)];
+            pack_rect.x -= half_padding;
+            pack_rect.y -= half_padding;
+        }
 
 		auto status = stbtt_PackFontRangesRenderIntoRects(&spc, &src_tmp.font_info, &src_tmp.pack_range, 1,
 														  src_tmp.rects);
