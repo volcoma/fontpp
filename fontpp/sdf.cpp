@@ -200,13 +200,13 @@ void sweep_and_update_block(const rect& block, unsigned char* out, int outstride
     // Calculate position of the anti-aliased pixels and distance to the boundary of the shape.
     for (auto y = 1; y < whole_block.h - 1; y++)
     {
+        auto original_y = y + whole_block.y;
         for (auto x = 1; x < whole_block.w - 1; x++)
         {
             auto original_x = x + whole_block.x;
-            auto original_y = y + whole_block.y;
 
             int tk, k = original_x + original_y * stride;
-            struct SDFpoint c = { (float)x, (float)y }; // TODO: is this correct?
+            struct SDFpoint c = { (float)x, (float)y };
             float d, gx, gy, glen;
 
             // Skip flat areas.
@@ -364,10 +364,10 @@ void sweep_and_update_block(const rect& block, unsigned char* out, int outstride
     // Write the calculated distances
     for (auto y = block.y, endy = block.y + block.h; y < endy; ++y)
     {
+        const auto whole_block_y = y - block.y + (has_bottom_shared_region ? shared_region : 0);
         for (auto x = block.x, endx = block.x + block.w; x < endx; ++x)
         {
             const auto whole_block_x = x - block.x + (has_left_shared_region ? shared_region : 0);
-            const auto whole_block_y = y - block.y + (has_bottom_shared_region ? shared_region : 0);
             float d = sqrtf(tdist[whole_block_x + whole_block_y * whole_block.w]) * scale;
             if (img[x + y * stride] > 127) d = -d;
             out[x + y * outstride] = (unsigned char)(sdf__clamp01(0.5f - d*0.5f) * 255.0f);
