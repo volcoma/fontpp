@@ -167,11 +167,36 @@ struct font_ft
     const FT_Glyph_Metrics* load_glyph(glyph_ft& in_glyph);
     const FT_Bitmap* render_glyph_and_get_info(glyph_info_ft* out_glyph_info);
     void blit_glyph(const FT_Bitmap* ft_bitmap, uint8_t* dst, uint32_t dst_pitch,
-                    const uint8_t* multiply_table = nullptr);
-    ~font_ft()
-    {
-        close();
-    }
+					const uint8_t* multiply_table = nullptr);
+	font_ft() = default;
+	font_ft(const font_ft& rhs) = delete;
+	font_ft& operator=(const font_ft& rhs) = delete;
+
+	font_ft(font_ft&& rhs) noexcept
+	{
+		info = rhs.info;
+		face = rhs.face;
+		rhs.face = nullptr;
+		user_flags = rhs.user_flags;
+		load_flags = rhs.load_flags;
+		render_mode = rhs.render_mode;
+	}
+
+	font_ft& operator=(font_ft&& rhs) noexcept
+	{
+		info = rhs.info;
+		face = rhs.face;
+		rhs.face = nullptr;
+		user_flags = rhs.user_flags;
+		load_flags = rhs.load_flags;
+		render_mode = rhs.render_mode;
+
+		return *this;
+	}
+	~font_ft()
+	{
+		close();
+	}
 
     // [Internals]
     // Font descriptor of the current font.
