@@ -8,13 +8,6 @@ find_package(Freetype)
 if(FREETYPE_FOUND)
 	target_link_libraries(${target_name} PRIVATE ${FREETYPE_LIBRARIES})
 	target_include_directories(${target_name} PRIVATE ${FREETYPE_INCLUDE_DIRS})
-
-	if(WIN32)
-		file(
-			COPY $ENV{FREETYPE_DIR}/freetype.dll
-			DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
-	endif()
-
 endif()
 
 target_include_directories(${target_name}

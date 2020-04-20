@@ -4,4 +4,7 @@
 	else()
 		set(ENV{FREETYPE_DIR} "${CMAKE_CURRENT_SOURCE_DIR}/win32")
 	endif()
+
+	add_custom_target(copy_freetype_dll ALL
+		COMMAND ${CMAKE_COMMAND} -E copy $ENV{FREETYPE_DIR}/freetype.dll ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 endif()
