@@ -3,6 +3,10 @@ file(GLOB_RECURSE libsrc *.h *.cpp *.hpp *.c *.cc)
 list(FILTER libsrc EXCLUDE REGEX "${CMAKE_CURRENT_SOURCE_DIR}/freetype/")
 list(FILTER libsrc EXCLUDE REGEX "${CMAKE_CURRENT_SOURCE_DIR}/stb/")
 
+set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
+set(THREADS_PREFER_PTHREAD_FLAG TRUE)
+find_package(Threads)
+
 set(target_name fontpp)
 
 set(TTF_LOADER "FREETYPE" CACHE STRING "Backend type chosen by the user at CMake configure time")
@@ -45,6 +49,7 @@ endif()
 
 add_library(${target_name} ${libsrc})
 
+target_link_libraries(${target_name} PRIVATE Threads::Threads)
 
 if("${TTF_LOADER}" STREQUAL "FREETYPE")
     target_link_libraries(${target_name} PRIVATE ${FREETYPE_LIBRARIES})

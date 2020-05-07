@@ -3,13 +3,13 @@
 int main()
 {
     fnt::font_glyph_ranges_builder builder{};
-    builder.add_ranges(fnt::get_glyph_ranges_default());
+	builder.add_ranges(fnt::get_glyph_ranges_all());
 
     fnt::font_atlas atlas{};
     atlas.add_font_default();
 
     std::string err{};
-    atlas.build(fnt::font_rasterizer::stb, err);
+	atlas.build(err);
 
     uint32_t w{};
     uint32_t h{};

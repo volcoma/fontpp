@@ -159,7 +159,7 @@ struct font_glyph_ranges_builder
 // zero-terminated list) NB: Make sure that your string are UTF-8 and NOT in your local code page. In
 // C++11, you can create UTF-8 string literal using the u8"Hello world" syntax. See FAQ for details. NB:
 // Consider using ImFontGlyphRangesBuilder to build glyph ranges from textual data.
-
+const font_wchar* get_glyph_ranges_all();
 const font_wchar* get_glyph_ranges_default();
 // Basic Latin, Extended Latin
 const font_wchar* get_glyph_ranges_latin();

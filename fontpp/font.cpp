@@ -529,7 +529,7 @@ const font_wchar* get_glyph_ranges_default()
     const font_wchar* get_glyph_ranges_all()
 {
     static const font_wchar ranges[] = {
-        0x0000, 0xFFFF,
+		0x0001, 0xFFFE,
         0,
         };
     return &ranges[0];
