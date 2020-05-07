@@ -30,26 +30,26 @@ inline uint32_t upper_power_of_two(uint32_t v)
 
 inline uint32_t estimate_width(uint32_t max, uint32_t min, uint32_t surface_sqrt)
 {
-	if(max < min)
-	{
-		return max;
-	}
+    if(max < min)
+    {
+        return max;
+    }
 
-	uint32_t width = max;
-	while(width > min)
-	{
-		if(surface_sqrt >= width * 0.67f)
-		{
-			return width;
-		}
+    uint32_t width = max;
+    while(width > min)
+    {
+        if(surface_sqrt >= width * 0.67f)
+        {
+            return width;
+        }
 
-		width /= 2;
-	}
+        width /= 2;
+    }
     if(min > width)
     {
         width *= 2;
     }
-	return width;
+    return width;
 }
 
 template <typename T>
@@ -112,7 +112,7 @@ class thread_pool
 public:
     using task_t = std::function<void()>;
 
-	thread_pool(size_t threads = std::thread::hardware_concurrency());
+    thread_pool(size_t threads = std::thread::hardware_concurrency());
     ~thread_pool();
 
 	template <class F, class... Args>
@@ -126,18 +126,19 @@ public:
 		std::future<return_type> res = task->get_future();
 		{
 			std::lock_guard<std::mutex> lock(queue_mutex);
+
 			tasks.emplace([task]() { (*task)(); });
 		}
-		condition->notify_one();
+        condition->notify_one();
 		return res;
 	}
 
 private:
 	std::vector<std::thread> workers;
-	std::queue<task_t> tasks;
+    std::queue<task_t> tasks;
 
 	std::mutex queue_mutex;
-	std::shared_ptr<std::condition_variable> condition;
+    std::shared_ptr<std::condition_variable> condition;
 	bool stop{};
 };
 
@@ -194,7 +195,7 @@ void parallel_for_2d(int width, int height, Callable function, int target_concur
 	const int hint = (target_concurrency == 0) ? int(std::thread::hardware_concurrency()) : target_concurrency;
 	const int jobs = std::min(width * height, (hint == 0) ? 4 : hint);
 
-	auto inner_loop = [&](const int thread_index)
+	auto inner_loop = [width, height, jobs, function = std::move(function)](const int thread_index)
 	{
 		const int n = width * height;
 
@@ -219,6 +220,7 @@ void parallel_for_2d(int width, int height, Callable function, int target_concur
 		t.wait();
 	}
 }
+
 }
 
 #endif /* parallel_util_hpp */

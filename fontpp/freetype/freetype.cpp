@@ -58,7 +58,7 @@
 #endif
 
 #ifndef STB_RECT_PACK_IMPLEMENTATION // in case the user already have an implementation in the _same_
-                                     // compilation unit (e.g. unity builds)
+    // compilation unit (e.g. unity builds)
 #define STBRP_ASSERT(x) assert(x)
 #define STBRP_STATIC
 #define STB_RECT_PACK_IMPLEMENTATION
@@ -167,37 +167,36 @@ struct font_ft
     const FT_Glyph_Metrics* load_glyph(glyph_ft& in_glyph);
     const FT_Bitmap* render_glyph_and_get_info(glyph_info_ft* out_glyph_info);
     void blit_glyph(const FT_Bitmap* ft_bitmap, uint8_t* dst, uint32_t dst_pitch,
-					const uint8_t* multiply_table = nullptr);
-	font_ft() = default;
-	font_ft(const font_ft& rhs) = delete;
-	font_ft& operator=(const font_ft& rhs) = delete;
+                    const uint8_t* multiply_table = nullptr);
+    font_ft() = default;
+    font_ft(const font_ft& rhs) = delete;
+    font_ft& operator=(const font_ft& rhs) = delete;
 
-	font_ft(font_ft&& rhs) noexcept
-	{
-		info = rhs.info;
-		face = rhs.face;
-		rhs.face = nullptr;
-		user_flags = rhs.user_flags;
-		load_flags = rhs.load_flags;
-		render_mode = rhs.render_mode;
-	}
+    font_ft(font_ft&& rhs) noexcept
+    {
+        info = rhs.info;
+        face = rhs.face;
+        rhs.face = nullptr;
+        user_flags = rhs.user_flags;
+        load_flags = rhs.load_flags;
+        render_mode = rhs.render_mode;
+    }
 
-	font_ft& operator=(font_ft&& rhs) noexcept
-	{
-		info = rhs.info;
-		face = rhs.face;
-		rhs.face = nullptr;
-		user_flags = rhs.user_flags;
-		load_flags = rhs.load_flags;
-		render_mode = rhs.render_mode;
+    font_ft& operator=(font_ft&& rhs) noexcept
+    {
+        info = rhs.info;
+        face = rhs.face;
+        rhs.face = nullptr;
+        user_flags = rhs.user_flags;
+        load_flags = rhs.load_flags;
+        render_mode = rhs.render_mode;
 
-		return *this;
-	}
-	~font_ft()
-	{
-		close();
-	}
-
+        return *this;
+    }
+    ~font_ft()
+    {
+        close();
+    }
     // [Internals]
     // Font descriptor of the current font.
     font_info_ft info{};
@@ -327,8 +326,8 @@ void font_ft::set_pixel_height(int pixel_height)
         }
     }
 
-//    std::string family_name = face->family_name;
-//    std::string style_name = face->style_name;
+    //    std::string family_name = face->family_name;
+    //    std::string style_name = face->style_name;
     if(info.cap_height == 0.0f)
     {
         info.cap_height = info.ascender;
@@ -439,23 +438,23 @@ void font_ft::blit_glyph(const FT_Bitmap* ft_bitmap, uint8_t* dst, uint32_t dst_
             break;
         }
         case FT_PIXEL_MODE_MONO: // Monochrome image, 1 bit per pixel. The bits in each byte are ordered from
-                                 // MSB to LSB.
+            // MSB to LSB.
+        {
+            uint8_t color0 = multiply_table ? multiply_table[0] : 0;
+            uint8_t color1 = multiply_table ? multiply_table[255] : 255;
+            for(uint32_t y = 0; y < h; y++, src += src_pitch, dst += dst_pitch)
             {
-                uint8_t color0 = multiply_table ? multiply_table[0] : 0;
-                uint8_t color1 = multiply_table ? multiply_table[255] : 255;
-                for(uint32_t y = 0; y < h; y++, src += src_pitch, dst += dst_pitch)
+                uint8_t bits = 0;
+                const uint8_t* bits_ptr = src;
+                for(uint32_t x = 0; x < w; x++, bits <<= 1)
                 {
-                    uint8_t bits = 0;
-                    const uint8_t* bits_ptr = src;
-                    for(uint32_t x = 0; x < w; x++, bits <<= 1)
-                    {
-                        if((x & 7) == 0)
-                            bits = *bits_ptr++;
-                        dst[x] = (bits & 0x80) ? color1 : color0;
-                    }
+                    if((x & 7) == 0)
+                        bits = *bits_ptr++;
+                    dst[x] = (bits & 0x80) ? color1 : color0;
                 }
-                break;
             }
+            break;
+        }
         default:
             assert(0 && "FreeTypeFont::BlitGlyph(): Unknown bitmap pixel mode!");
     }
@@ -582,7 +581,7 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
             for(int codepoint = src_range[0]; codepoint <= src_range[1]; codepoint++)
             {
                 if(dst_tmp.glyphs_set.get_bit(codepoint)) // Don't overwrite existing glyphs. We could make
-                                                          // this an option (e.g. MergeOverwrite)
+                    // this an option (e.g. MergeOverwrite)
                     continue;
                 uint32_t glyph_index =
                     FT_Get_Char_Index(src_tmp.font.face, FT_ULong(codepoint)); // It is actually in the font?
@@ -755,6 +754,8 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
         // We can have multiple input fonts writing into a same destination
         // font (when using MergeMode=true)
         auto& dst_font = cfg.dst_font;
+        if(cfg.merge_mode)
+            dst_font->build_lookup_table();
 
         const float ascent = src_tmp.font.info.ascender;
         const float descent = src_tmp.font.info.descender;
@@ -780,6 +781,10 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
         for(int glyph_i = 0; glyph_i < src_tmp.glyphs_count; glyph_i++)
         {
             auto& src_glyph = src_tmp.glyphs_list[size_t(glyph_i)];
+
+            if (cfg.merge_mode && dst_font->find_glyph_no_fallback(font_wchar(src_glyph.codepoint)))
+                continue;
+
             auto& pack_rect = src_tmp.rects[size_t(glyph_i)];
             if(!pack_rect.was_packed)
             {
@@ -787,6 +792,7 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
                 return false;
             }
             auto& info = src_glyph.info;
+
 
             //assert(info.width + padding <= pack_rect.w);
             //assert(info.height + padding <= pack_rect.h);

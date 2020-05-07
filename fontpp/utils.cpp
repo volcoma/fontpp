@@ -9,7 +9,7 @@ thread_pool::thread_pool(size_t threads)
     workers.reserve(threads);
     for(size_t i = 0; i < threads; ++i)
     {
-        workers.emplace_back([this, condition = this->condition] {
+        workers.emplace_back([this, keep_condition = this->condition] {
             for(;;)
             {
                 task_t task;
@@ -44,7 +44,6 @@ thread_pool::~thread_pool()
         std::unique_lock<std::mutex> lock(queue_mutex);
         stop = true;
     }
-
     condition->notify_all();
 
     for(auto& worker : workers)
