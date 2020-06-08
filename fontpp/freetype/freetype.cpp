@@ -483,7 +483,7 @@ struct font_info_build_src_data
     // Glyph count (excluding missing glyphs and glyphs already set by an earlier source font)
     int glyphs_count{};
     // Glyph bit map (random access, 1-bit per codepoint. This will be a maximum of 8KB)
-    bool_vector glyphs_set{};
+    bit_vector glyphs_set{};
     std::vector<glyph_ft> glyphs_list{};
 };
 
@@ -496,10 +496,10 @@ struct font_info_build_dst_data
     int glyphs_highest{};
     int glyphs_count{};
     // This is used to resolve collision when multiple sources are merged into a same destination font.
-    bool_vector glyphs_set{};
+    bit_vector glyphs_set{};
 };
 
-void unpack_bool_vector_to_flat_index_list(const bool_vector* in, std::vector<glyph_ft>* out)
+void unpack_bit_vector_to_flat_index_list(const bit_vector* in, std::vector<glyph_ft>* out)
 {
     assert(sizeof(in->storage[0]) == sizeof(int));
     int idx = 0;
@@ -578,9 +578,9 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
             dst_tmp.glyphs_set.resize(dst_tmp.glyphs_highest + 1);
 
         for(const font_wchar* src_range = src_tmp.src_ranges; src_range[0] && src_range[1]; src_range += 2)
-            for(int codepoint = src_range[0]; codepoint <= src_range[1]; codepoint++)
+            for(font_wchar codepoint = src_range[0]; codepoint <= src_range[1]; codepoint++)
             {
-                if(dst_tmp.glyphs_set.get_bit(codepoint)) // Don't overwrite existing glyphs. We could make
+                if(dst_tmp.glyphs_set.get_bit(int(codepoint))) // Don't overwrite existing glyphs. We could make
                     // this an option (e.g. MergeOverwrite)
                     continue;
                 uint32_t glyph_index =
@@ -593,8 +593,8 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
                 // Add to avail set/counters
                 src_tmp.glyphs_count++;
                 dst_tmp.glyphs_count++;
-                src_tmp.glyphs_set.set_bit(codepoint, true);
-                dst_tmp.glyphs_set.set_bit(codepoint, true);
+                src_tmp.glyphs_set.set_bit(int(codepoint), true);
+                dst_tmp.glyphs_set.set_bit(int(codepoint), true);
                 total_glyphs_count++;
             }
     }
@@ -604,7 +604,7 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
     for(auto& src_tmp : src_tmp_array)
     {
         src_tmp.glyphs_list.reserve(size_t(src_tmp.glyphs_count));
-        unpack_bool_vector_to_flat_index_list(&src_tmp.glyphs_set, &src_tmp.glyphs_list);
+        unpack_bit_vector_to_flat_index_list(&src_tmp.glyphs_set, &src_tmp.glyphs_list);
         src_tmp.glyphs_set.clear();
         assert(src_tmp.glyphs_list.size() == size_t(src_tmp.glyphs_count));
     }

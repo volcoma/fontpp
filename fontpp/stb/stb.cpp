@@ -54,7 +54,7 @@ struct font_info_build_src_data
     // Glyph count (excluding missing glyphs and glyphs already set by an earlier source font)
     int glyphs_count{};
     // Glyph bit map (random access, 1-bit per codepoint. This will be a maximum of 8KB)
-    bool_vector glyphs_set{};
+    bit_vector glyphs_set{};
     // Glyph codepoints list (flattened version of GlyphsMap)
     std::vector<int> glyphs_list{};
 };
@@ -68,10 +68,10 @@ struct font_info_build_dst_data
     int glyphs_highest{};
     int glyphs_count{};
     // This is used to resolve collision when multiple sources are merged into a same destination font.
-    bool_vector glyphs_set{};
+    bit_vector glyphs_set{};
 };
 
-void unpack_bool_vector_to_flat_index_list(const bool_vector* in, std::vector<int>* out)
+void unpack_bit_vector_to_flat_index_list(const bit_vector* in, std::vector<int>* out)
 {
     assert(sizeof(in->storage[0]) == sizeof(int));
     int idx = 0;
@@ -169,7 +169,7 @@ bool build(font_atlas* atlas, std::string& err)
     for(auto& src_tmp : src_tmp_array)
     {
         src_tmp.glyphs_list.reserve(size_t(src_tmp.glyphs_count));
-        unpack_bool_vector_to_flat_index_list(&src_tmp.glyphs_set, &src_tmp.glyphs_list);
+        unpack_bit_vector_to_flat_index_list(&src_tmp.glyphs_set, &src_tmp.glyphs_list);
         src_tmp.glyphs_set.clear();
         assert(src_tmp.glyphs_list.size() == size_t(src_tmp.glyphs_count));
     }

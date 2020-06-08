@@ -3,11 +3,8 @@ file(GLOB_RECURSE libsrc *.h *.cpp *.hpp *.c *.cc)
 list(FILTER libsrc EXCLUDE REGEX "${CMAKE_CURRENT_SOURCE_DIR}/freetype/")
 list(FILTER libsrc EXCLUDE REGEX "${CMAKE_CURRENT_SOURCE_DIR}/stb/")
 
-set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
-set(THREADS_PREFER_PTHREAD_FLAG TRUE)
-find_package(Threads)
-
 set(target_name fontpp)
+
 
 set(TTF_LOADER "FREETYPE" CACHE STRING "Backend type chosen by the user at CMake configure time")
 set_property(CACHE TTF_LOADER PROPERTY STRINGS FREETYPE STB)
@@ -19,41 +16,38 @@ if("${TTF_LOADER}" STREQUAL "FREETYPE")
 
     if(WIN32 AND CMAKE_RUNTIME_OUTPUT_DIRECTORY)
         add_custom_target(copy_freetype_binaries ALL
-            COMMAND ${CMAKE_COMMAND} -E copy ${FREETYPE_LIBRARIES} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+			COMMAND ${CMAKE_COMMAND} -E copy ${FREETYPE_LIBRARIES} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
     endif()
 
-    file(GLOB TTF_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/freetype/*.h"
-                          "${CMAKE_CURRENT_SOURCE_DIR}/freetype/*.cpp"
-                          "${CMAKE_CURRENT_SOURCE_DIR}/freetype/*.hpp"
-                          "${CMAKE_CURRENT_SOURCE_DIR}/freetype/*.c"
-                          "${CMAKE_CURRENT_SOURCE_DIR}/freetype/*.cc")
+    file(GLOB LIBTTF_libsrc "${CMAKE_CURRENT_SOURCE_DIR}/freetype/*.h"
+                             "${CMAKE_CURRENT_SOURCE_DIR}/freetype/*.cpp"
+                             "${CMAKE_CURRENT_SOURCE_DIR}/freetype/*.hpp"
+                             "${CMAKE_CURRENT_SOURCE_DIR}/freetype/*.c"
+                             "${CMAKE_CURRENT_SOURCE_DIR}/freetype/*.cc")
 
     add_definitions(-DTTF_LOADER_FREETYPE)
-    list(APPEND libsrc ${TTF_SOURCES})
-
+    list(APPEND libsrc ${LIBTTF_libsrc})
 
 elseif("${TTF_LOADER}" STREQUAL "STB")
     message( STATUS "STB TTF loader selected." )
 
-    file(GLOB TTF_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/stb/*.h"
-                          "${CMAKE_CURRENT_SOURCE_DIR}/stb/*.cpp"
-                          "${CMAKE_CURRENT_SOURCE_DIR}/stb/*.hpp"
-                          "${CMAKE_CURRENT_SOURCE_DIR}/stb/*.c"
-                          "${CMAKE_CURRENT_SOURCE_DIR}/stb/*.cc")
+    file(GLOB LIBTTF_libsrc "${CMAKE_CURRENT_SOURCE_DIR}/stb/*.h"
+                             "${CMAKE_CURRENT_SOURCE_DIR}/stb/*.cpp"
+                             "${CMAKE_CURRENT_SOURCE_DIR}/stb/*.hpp"
+                             "${CMAKE_CURRENT_SOURCE_DIR}/stb/*.c"
+                             "${CMAKE_CURRENT_SOURCE_DIR}/stb/*.cc")
 
     add_definitions(-DTTF_LOADER_STB)
-    list(APPEND libsrc ${TTF_SOURCES})
+    list(APPEND libsrc ${LIBTTF_libsrc})
 else()
     message( FATAL_ERROR "No TTF backend type was selected." )
 endif()
 
 add_library(${target_name} ${libsrc})
 
-target_link_libraries(${target_name} PRIVATE Threads::Threads)
 
 if("${TTF_LOADER}" STREQUAL "FREETYPE")
-    target_link_libraries(${target_name} PRIVATE ${FREETYPE_LIBRARIES})
-    target_include_directories(${target_name} PRIVATE ${FREETYPE_INCLUDE_DIRS})
+    target_link_libraries(${target_name} PRIVATE Freetype::Freetype)
 endif()
 
 target_include_directories(${target_name}

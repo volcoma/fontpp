@@ -57,9 +57,9 @@ inline T clamp(T v, T mn, T mx)
 {
 	return (v < mn) ? mn : (v > mx) ? mx : v;
 }
-// Helper: bool_vector. Store 1-bit per value.
+// Helper: bit_vector. Store 1-bit per value.
 // Note that Resize() currently clears the whole vector.
-struct bool_vector
+struct bit_vector
 {
 	std::vector<int> storage{};
 	void resize(int sz)

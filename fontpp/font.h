@@ -17,9 +17,23 @@ struct font_config;
 struct font_glyph;
 // Helper to build glyph ranges from text/string data
 struct font_glyph_ranges_builder;
+
+#define FNT_USE_WCHAR32
+// Helper: Unicode defines
+#define FNT_UNICODE_CODEPOINT_INVALID 0xFFFD     // Invalid Unicode code point (standard value).
+#ifdef FNT_USE_WCHAR32
+#define FNT_UNICODE_CODEPOINT_MAX     0x10FFFF   // Maximum Unicode code point supported by this build.
+// A single U32 character for keyboard input/display.
+// We encode them as multi bytes UTF-8 when used in strings.
+using font_wchar = uint32_t;
+#else
+#define FNT_UNICODE_CODEPOINT_MAX     0xFFFF     // Maximum Unicode code point supported by this build.
 // A single U16 character for keyboard input/display.
 // We encode them as multi bytes UTF-8 when used in strings.
 using font_wchar = uint16_t;
+#endif
+
+
 
 struct pair_hash
 {
@@ -89,8 +103,10 @@ struct font_config
 
 struct font_glyph
 {
-    /// 0x0000..0xFFFF
-    font_wchar codepoint{};
+    font_glyph() : codepoint(0), visible(0){}
+
+    uint32_t codepoint : 31;
+    uint32_t visible : 1;
 
     /// Distance to next character (= data from font + font_config::glyph_extra_spacing_x baked in)
     float advance_x{};
@@ -100,6 +116,7 @@ struct font_glyph
 
     /// Texture coordinates
     float u0{}, v0{}, u1{}, v1{};
+
 };
 
 // Helper to build glyph ranges from text/string data. Feed your application strings/characters to it then
@@ -115,7 +132,7 @@ struct font_glyph_ranges_builder
     }
     inline void clear()
     {
-        size_t size_in_bytes = 0x10000 / 8;
+        size_t size_in_bytes = (FNT_UNICODE_CODEPOINT_MAX + 1) / 8;
         used_chars.resize(size_in_bytes / sizeof(uint32_t), 0);
     }
     // Get bit n in the array
@@ -170,6 +187,10 @@ const font_wchar* get_glyph_ranges_japanese();
 // Default + Half-Width + Japanese Hiragana/Katakana + full set of about 21000 CJK Unified Ideographs
 const font_wchar* get_glyph_ranges_chinese_full();
 
+// Store all official characters for Simplified Chinese.
+// Sourced from https://en.wikipedia.org/wiki/Table_of_General_Standard_Chinese_Characters
+// (Stored as accumulative offsets from the initial unicode codepoint 0x4E00. This encoding is designed to helps us compact the source code size.)
+const font_wchar* get_glyph_ranges_chinese_simplified_official();
 // Default + Half-Width + Japanese
 // Hiragana/Katakana + set of 2500 CJK Unified
 // Ideographs for common simplified Chinese
@@ -182,7 +203,16 @@ const font_wchar* get_glyph_ranges_thai();
 // Default + Vietname characters
 const font_wchar* get_glyph_ranges_vietnamese();
 
+// Default + Currency
+const font_wchar* get_glyph_ranges_arabic();
+
+// Default + Currency
+const font_wchar* get_glyph_ranges_currency();
+
+
 int text_char_from_utf8(unsigned int* out_char, const char* in_text, const char* in_text_end);
+
+std::string unicode_to_utf8(const unsigned int* in_text, const unsigned int* in_text_end);
 
 // Load and rasterize multiple TTF/OTF fonts into a same texture. The font atlas will build a single texture
 // holding:
@@ -361,9 +391,10 @@ struct font_info
     // font rasterization/texture cost (not exact, we approximate the cost of padding
     // between glyphs)
     int metrics_total_surface{}; // out
-
+    uint8_t used_4k_pages_map[(FNT_UNICODE_CODEPOINT_MAX+1)/4096/8]; // 2 bytes if ImWchar=ImWchar16, 34 bytes if ImWchar==ImWchar32. Store 1-bit for each block of 4K codepoints that has one active glyph. This is mainly used to facilitate iterations across all used codepoints.
     bool dirty_lookup_tables{}; // out
 
+    font_info();
     // Methods
     ~font_info();
 
@@ -392,6 +423,8 @@ struct font_info
     // have been built.
     void add_remap_char(font_wchar dst, font_wchar src, bool overwrite_dst = true);
     void set_fallback_char(font_wchar c);
+    bool is_glyph_range_unused(uint32_t c_begin, uint32_t c_last) const;
+    void set_glyph_visible(font_wchar c, bool visible);
 };
 
 } // namespace
