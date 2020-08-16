@@ -318,26 +318,51 @@ bool font_atlas::build(std::string& err)
         tex_glyph_padding += sdf_spread * 2;
     }
 
+    auto start = std::chrono::high_resolution_clock::now();
+
+    bool result = false;
 #ifdef TTF_LOADER_FREETYPE
-    return freetype::build(this, err);
+    result = freetype::build(this, err);
 #elif TTF_LOADER_STB
-    return stb::build(this, err);
+    result = stb::build(this, err);
 #endif
 
-    return is_built();
+    auto end = std::chrono::high_resolution_clock::now();
+    build_time = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+    return result && is_built();
 }
 
-void font_atlas::finish()
+bool font_atlas::finish(std::string& err)
 {
     size_t total_glyphs{};
     // Build all fonts lookup tables
     for(auto& font : fonts)
     {
         if(font->dirty_lookup_tables)
-            font->build_lookup_table();
+        {
+            if(!font->build_lookup_table(err))
+            {
+                return false;
+            }
+        }
 
         total_glyphs += font->glyphs.size();
     }
+
+    if(total_glyphs == 0)
+    {
+        err = "No glyphs were loaded.";
+        return false;
+    }
+
+    generate_sdf();
+
+    return true;
+}
+
+void font_atlas::generate_sdf()
+{
     if(sdf_spread > 0)
     {
         std::vector<uint8_t> sdf(tex_pixels_alpha8.size());
@@ -346,26 +371,22 @@ void font_atlas::finish()
         //            auto start = std::chrono::high_resolution_clock::now();
         //            brute_force_sdf_parallel(sdf.data(), tex_pixels_alpha8.data(), int(tex_width), int(tex_height), int(sdf_spread));
         //            auto end = std::chrono::high_resolution_clock::now();
-        //            auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-        //            std::cout << "[mt] sdf vectorization on (" << tex_width << "x" << tex_height << ")(glyphs:" << total_glyphs << ") took : " << dur.count() << "ms" << std::endl;
+        //            sdf_time = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
         //        }
         //        {
         //            auto start = std::chrono::high_resolution_clock::now();
         //            sweep_and_update_sdf(sdf.data(), int(tex_width), sdf_spread, tex_pixels_alpha8.data(), int(tex_width), int(tex_height), int(tex_width), false);
         //            auto end = std::chrono::high_resolution_clock::now();
-        //            auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-        //            std::cout << "[st-edtaa] sdf vectorization on (" << tex_width << "x" << tex_height << ")(glyphs:" << total_glyphs << ") took : " << dur.count() << "ms" << std::endl;
+        //            sdf_time= std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
         //        }
 
         {
             auto start = std::chrono::high_resolution_clock::now();
             sweep_and_update_sdf(sdf.data(), int(tex_width), float(sdf_spread), tex_pixels_alpha8.data(), int(tex_width), int(tex_height), int(tex_width));
             auto end = std::chrono::high_resolution_clock::now();
-            auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-            std::cout << "[mt-edtaa] sdf vectorization on (" << tex_width << "x" << tex_height << ")(glyphs:" << total_glyphs << ") took : " << dur.count() << "ms" << std::endl;
+            sdf_time = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
         }
 
-        std::cout << std::endl;
         tex_pixels_alpha8 = std::move(sdf);
     }
 }
@@ -1364,8 +1385,14 @@ void font_info::clear_output_data()
     metrics_total_surface = 0;
 }
 
-void font_info::build_lookup_table()
+bool font_info::build_lookup_table(std::string& err)
 {
+    if(glyphs.empty())
+    {
+        err = "No glyphs were loaded. Maybe the specified ranges were not present in the font itself.";
+        return false;
+    }
+
     size_t max_codepoint = 0;
     for(const auto& glyph : glyphs)
         max_codepoint = std::max(max_codepoint, size_t(glyph.codepoint));
@@ -1390,13 +1417,13 @@ void font_info::build_lookup_table()
     // Create a glyph to handle TAB
     // FIXME: Needs proper TAB handling but it needs to be contextualized (or we could arbitrary say that each
     // string starts at "column 0" ?)
-    auto tab_glyph_found = find_glyph(font_wchar(' '));
-    if(tab_glyph_found)
+    if(find_glyph(font_wchar(' ')))
     {
         if(glyphs.back().codepoint != '\t') // So we can call this function multiple times
             glyphs.resize(glyphs.size() + 1);
+
         font_glyph& tab_glyph = glyphs.back();
-        tab_glyph = *tab_glyph_found;
+        tab_glyph = *find_glyph(font_wchar(' '));
         tab_glyph.codepoint = '\t';
         tab_glyph.advance_x *= IM_TABSIZE;
         index_advance_x[size_t(tab_glyph.codepoint)] = tab_glyph.advance_x;
@@ -1417,6 +1444,8 @@ void font_info::build_lookup_table()
     {
         x_height = ascent - descent;
     }
+
+    return true;
 }
 
 // API is designed this way to avoid exposing the 4K page size
@@ -1441,7 +1470,9 @@ void font_info::set_glyph_visible(font_wchar c, bool visible)
 void font_info::set_fallback_char(font_wchar c)
 {
     fallback_char = c;
-    build_lookup_table();
+
+    std::string err;
+    build_lookup_table(err);
 }
 
 void font_info::grow_index(size_t new_size)
@@ -1734,73 +1765,77 @@ static unsigned int stb_decompress_length(const uint8_t* input)
     return static_cast<unsigned int>((input[8] << 24) + (input[9] << 16) + (input[10] << 8) + input[11]);
 }
 
-static uint8_t *stb__barrier_out_e, *stb__barrier_out_b;
-static const uint8_t* stb__barrier_in_b;
-static uint8_t* stb__dout;
-static void stb__match(const uint8_t* data, unsigned int length)
+struct stb_decompress_ctx
+{
+    uint8_t *stb__barrier_out_e{}, *stb__barrier_out_b{};
+    const uint8_t* stb__barrier_in_b{};
+    uint8_t* stb__dout{};
+};
+
+static void stb__match(stb_decompress_ctx* ctx, const uint8_t* data, unsigned int length)
 {
     // INVERSE of memmove... write each byte before copying the next...
-    assert(stb__dout + length <= stb__barrier_out_e);
-    if(stb__dout + length > stb__barrier_out_e)
+    assert(ctx->stb__dout + length <= ctx->stb__barrier_out_e);
+    if(ctx->stb__dout + length > ctx->stb__barrier_out_e)
     {
-        stb__dout += length;
+        ctx->stb__dout += length;
         return;
     }
-    if(data < stb__barrier_out_b)
+    if(data < ctx->stb__barrier_out_b)
     {
-        stb__dout = stb__barrier_out_e + 1;
+        ctx->stb__dout = ctx->stb__barrier_out_e + 1;
         return;
     }
     while(length--)
-        *stb__dout++ = *data++;
+        *ctx->stb__dout++ = *data++;
 }
 
-static void stb__lit(const uint8_t* data, unsigned int length)
+static void stb__lit(stb_decompress_ctx* ctx, const uint8_t* data, unsigned int length)
 {
-    assert(stb__dout + length <= stb__barrier_out_e);
-    if(stb__dout + length > stb__barrier_out_e)
+    assert(ctx->stb__dout + length <= ctx->stb__barrier_out_e);
+    if(ctx->stb__dout + length > ctx->stb__barrier_out_e)
     {
-        stb__dout += length;
+        ctx->stb__dout += length;
         return;
     }
-    if(data < stb__barrier_in_b)
+    if(data < ctx->stb__barrier_in_b)
     {
-        stb__dout = stb__barrier_out_e + 1;
+        ctx->stb__dout = ctx->stb__barrier_out_e + 1;
         return;
     }
-    memcpy(stb__dout, data, length);
-    stb__dout += length;
+    memcpy(ctx->stb__dout, data, length);
+    ctx->stb__dout += length;
 }
 
 #define stb__in2(x) ((i[x] << 8) + i[(x) + 1])
 #define stb__in3(x) ((i[x] << 16) + stb__in2((x) + 1))
 #define stb__in4(x) ((i[x] << 24) + stb__in3((x) + 1))
 
-static const uint8_t* stb_decompress_token(const uint8_t* i)
+static const uint8_t* stb_decompress_token(stb_decompress_ctx* ctx, const uint8_t* i)
 {
     if(*i >= 0x20)
     { // use fewer if's for cases that expand small
         if(*i >= 0x80)
-            stb__match(stb__dout - i[1] - 1, i[0] - 0x80 + 1), i += 2;
+            stb__match(ctx, ctx->stb__dout - i[1] - 1, i[0] - 0x80 + 1), i += 2;
         else if(*i >= 0x40)
-            stb__match(stb__dout - (stb__in2(0) - 0x4000 + 1), i[2] + 1), i += 3;
+            stb__match(ctx, ctx->stb__dout - (stb__in2(0) - 0x4000 + 1), i[2] + 1), i += 3;
         else /* *i >= 0x20 */
-            stb__lit(i + 1, i[0] - 0x20 + 1), i += 1 + (i[0] - 0x20 + 1);
+            stb__lit(ctx, i + 1, i[0] - 0x20 + 1), i += 1 + (i[0] - 0x20 + 1);
     }
     else
     { // more ifs for cases that expand large, since overhead is amortized
         if(*i >= 0x18)
-            stb__match(stb__dout - (stb__in3(0) - 0x180000 + 1), i[3] + 1), i += 4;
+            stb__match(ctx, ctx->stb__dout - (stb__in3(0) - 0x180000 + 1), i[3] + 1), i += 4;
         else if(*i >= 0x10)
-            stb__match(stb__dout - (stb__in3(0) - 0x100000 + 1), stb__in2(3) + 1), i += 5;
+            stb__match(ctx, ctx->stb__dout - (stb__in3(0) - 0x100000 + 1), stb__in2(3) + 1), i += 5;
         else if(*i >= 0x08)
-            stb__lit(i + 2, stb__in2(0) - 0x0800 + 1), i += 2 + (stb__in2(0) - 0x0800 + 1);
+            stb__lit(ctx, i + 2, stb__in2(0) - 0x0800 + 1), i += 2 + (stb__in2(0) - 0x0800 + 1);
         else if(*i == 0x07)
-            stb__lit(i + 3, stb__in2(1) + 1), i += 3 + (stb__in2(1) + 1);
+            stb__lit(ctx, i + 3, stb__in2(1) + 1), i += 3 + (stb__in2(1) + 1);
         else if(*i == 0x06)
-            stb__match(stb__dout - (stb__in3(1) + 1), i[4] + 1), i += 5;
+            stb__match(ctx, ctx->stb__dout - (stb__in3(1) + 1), i[4] + 1), i += 5;
         else if(*i == 0x04)
-            stb__match(stb__dout - (stb__in3(1) + 1), stb__in2(4) + 1), i += 6;
+            stb__match(ctx, ctx->stb__dout - (stb__in3(1) + 1), stb__in2(4) + 1), i += 6;
     }
     return i;
 }
@@ -1856,22 +1891,23 @@ static unsigned int stb_decompress(uint8_t* output, const uint8_t* i, unsigned i
     if(stb__in4(4) != 0)
         return 0; // error! stream is > 4GB
     olen = stb_decompress_length(i);
-    stb__barrier_in_b = i;
-    stb__barrier_out_e = output + olen;
-    stb__barrier_out_b = output;
+    stb_decompress_ctx ctx{};
+    ctx.stb__barrier_in_b = i;
+    ctx.stb__barrier_out_e = output + olen;
+    ctx.stb__barrier_out_b = output;
     i += 16;
 
-    stb__dout = output;
+    ctx.stb__dout = output;
     for(;;)
     {
         const uint8_t* old_i = i;
-        i = stb_decompress_token(i);
+        i = stb_decompress_token(&ctx, i);
         if(i == old_i)
         {
             if(*i == 0x05 && i[1] == 0xfa)
             {
-                assert(stb__dout == output + olen);
-                if(stb__dout != output + olen)
+                assert(ctx.stb__dout == output + olen);
+                if(ctx.stb__dout != output + olen)
                     return 0;
                 if(stb_adler32(1, output, olen) != (unsigned int)stb__in4(2))
                     return 0;
@@ -1883,8 +1919,8 @@ static unsigned int stb_decompress(uint8_t* output, const uint8_t* i, unsigned i
                 return 0;
             }
         }
-        assert(stb__dout <= output + olen);
-        if(stb__dout > output + olen)
+        assert(ctx.stb__dout <= output + olen);
+        if(ctx.stb__dout > output + olen)
             return 0;
     }
 }

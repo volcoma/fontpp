@@ -578,9 +578,9 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
             dst_tmp.glyphs_set.resize(dst_tmp.glyphs_highest + 1);
 
         for(const font_wchar* src_range = src_tmp.src_ranges; src_range[0] && src_range[1]; src_range += 2)
-            for(font_wchar codepoint = src_range[0]; codepoint <= src_range[1]; codepoint++)
+            for(int codepoint = src_range[0]; codepoint <= src_range[1]; codepoint++)
             {
-                if(dst_tmp.glyphs_set.get_bit(int(codepoint))) // Don't overwrite existing glyphs. We could make
+                if(dst_tmp.glyphs_set.get_bit(codepoint)) // Don't overwrite existing glyphs. We could make
                     // this an option (e.g. MergeOverwrite)
                     continue;
                 uint32_t glyph_index =
@@ -593,8 +593,8 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
                 // Add to avail set/counters
                 src_tmp.glyphs_count++;
                 dst_tmp.glyphs_count++;
-                src_tmp.glyphs_set.set_bit(int(codepoint), true);
-                dst_tmp.glyphs_set.set_bit(int(codepoint), true);
+                src_tmp.glyphs_set.set_bit(codepoint, true);
+                dst_tmp.glyphs_set.set_bit(codepoint, true);
                 total_glyphs_count++;
             }
     }
@@ -602,7 +602,7 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
     // 3. Unpack our bit map into a flat list (we now have all the Unicode points that we know are requested
     // _and_ available _and_ not overlapping another)
     for(auto& src_tmp : src_tmp_array)
-    {
+    {        
         src_tmp.glyphs_list.reserve(size_t(src_tmp.glyphs_count));
         unpack_bit_vector_to_flat_index_list(&src_tmp.glyphs_set, &src_tmp.glyphs_list);
         src_tmp.glyphs_set.clear();
@@ -702,7 +702,7 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
     pack_nodes.resize(num_nodes_for_packing_algorithm);
     stbrp_context pack_context;
     stbrp_init_target(&pack_context, int(atlas->tex_width - atlas->tex_glyph_padding),
-                      int((1024 * 32) - atlas->tex_glyph_padding), pack_nodes.data(), int(pack_nodes.size()));
+                      int((1024 * 64) - atlas->tex_glyph_padding), pack_nodes.data(), int(pack_nodes.size()));
 
     // 6. Pack each source font. No rendering yet, we are working with rectangles in an infinitely tall
     // texture at this point.
@@ -755,7 +755,12 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
         // font (when using MergeMode=true)
         auto& dst_font = cfg.dst_font;
         if(cfg.merge_mode)
-            dst_font->build_lookup_table();
+        {
+            if(!dst_font->build_lookup_table(err))
+            {
+                return false;
+            }
+        }
 
         const float ascent = src_tmp.font.info.ascender;
         const float descent = src_tmp.font.info.descender;
@@ -774,7 +779,6 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
 
         const float font_off_x = cfg.glyph_offset_x;
         const float font_off_y = cfg.glyph_offset_y;
-        const auto sdf_spread = atlas->sdf_spread;
         bool has_kerning_table = FT_HAS_KERNING(src_tmp.font.face);
 
         const auto padding = int(atlas->tex_glyph_padding);
@@ -815,48 +819,16 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
                 char_off_x += cfg.pixel_snap_h
                                   ? float(int((char_advance_x_mod - char_advance_x_org) * 0.5f))
                                   : (char_advance_x_mod - char_advance_x_org) * 0.5f;
-            auto sdf_shift_x = 0.0f;
-            auto sdf_shift_y = 0.0f;
-            if(sdf_spread > 0)
-            {
-                sdf_shift_x = (float(sdf_spread + 1)) / atlas->tex_width;
-                sdf_shift_y = (float(sdf_spread + 1)) / atlas->tex_height;
-            }
             // Register glyph
-            auto ft_x0 = float(info.offset_x);
-            auto ft_y0 = float(info.offset_y);
-            float ft_x1 = ft_x0 + info.width;
-            float ft_y1 = ft_y0 + info.height;
-            float ft_u0 = float(tx) / float(atlas->tex_width);
-            float ft_v0 = float(ty) / float(atlas->tex_height);
+            auto x0 = float(info.offset_x);
+            auto y0 = float(info.offset_y);
+            float x1 = x0 + info.width;
+            float y1 = y0 + info.height;
+            float u0 = float(tx) / float(atlas->tex_width);
+            float v0 = float(ty) / float(atlas->tex_height);
 
-            float ft_u1 = (float(tx) + info.width) / float(atlas->tex_width);
-            float ft_v1 = (float(ty) + info.height) / float(atlas->tex_height);
-
-            float xsize = ft_u1 - ft_u0;
-            float ysize = ft_v1 - ft_v0;
-            auto u0 = ft_u0 - sdf_shift_x;
-            auto v0 = ft_v0 - sdf_shift_y;
-            auto u1 = ft_u1 + sdf_shift_x;
-            auto v1 = ft_v1 + sdf_shift_y;
-
-            if(xsize > 0.0f)
-            {
-                sdf_shift_x = sdf_shift_x / xsize;
-            }
-            if(ysize > 0.0f)
-            {
-                sdf_shift_y = sdf_shift_y / ysize;
-            }
-            xsize = ft_x1 - ft_x0;
-            ysize = ft_y1 - ft_y0;
-            sdf_shift_x *= xsize;
-            sdf_shift_y *= ysize;
-
-            auto x0 = ft_x0 - sdf_shift_x;
-            auto y0 = ft_y0 - sdf_shift_y;
-            auto x1 = ft_x1 + sdf_shift_x;
-            auto y1 = ft_y1 + sdf_shift_y;
+            float u1 = (float(tx) + info.width) / float(atlas->tex_width);
+            float v1 = (float(ty) + info.height) / float(atlas->tex_height);
 
             // if no kerning table, don't waste time looking
             if(has_kerning_table && cfg.kerning_glyphs_limit > uint32_t(src_tmp.glyphs_count))
@@ -890,9 +862,7 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
         src_tmp.rects = nullptr;
     }
 
-    atlas->finish();
-
-    return true;
+    return atlas->finish(err);
 }
 }
 

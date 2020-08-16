@@ -347,8 +347,12 @@ bool build(font_atlas* atlas, std::string& err)
         // We can have multiple input fonts writing into a same destination
         // font (when using MergeMode=true)
         if(cfg.merge_mode)
-            dst_font->build_lookup_table();
-
+        {
+            if(!dst_font->build_lookup_table(err))
+            {
+                return false;
+            }
+        }
 
         const float font_scale = stbtt_ScaleForPixelHeight(&src_tmp.font_info, cfg.size_pixels);
         int unscaled_ascent, unscaled_descent, unscaled_line_gap;
@@ -410,37 +414,15 @@ bool build(font_atlas* atlas, std::string& err)
             stbtt_GetPackedQuad(src_tmp.packed_chars, int(atlas->tex_width), int(atlas->tex_height), glyph_i,
                                 &dummy_x, &dummy_y, &q, 0);
 
-            float xsize = q.s1 - q.s0;
-            float ysize = q.t1 - q.t0;
-            auto sdf_shift_x = 0.0f;
-            auto sdf_shift_y = 0.0f;
-            if(sdf_spread > 0)
-            {
-                sdf_shift_x = (float(sdf_spread + 1)) / atlas->tex_width;
-                sdf_shift_y = (float(sdf_spread + 1)) / atlas->tex_height;
-            }
-            auto u0 = q.s0 - sdf_shift_x;
-            auto v0 = q.t0 - sdf_shift_y;
-            auto u1 = q.s1 + sdf_shift_x;
-            auto v1 = q.t1 + sdf_shift_y;
+            auto u0 = q.s0;
+            auto v0 = q.t0;
+            auto u1 = q.s1;
+            auto v1 = q.t1;
 
-            if(xsize > 0.0f)
-            {
-                sdf_shift_x = sdf_shift_x / xsize;
-            }
-            if(ysize > 0.0f)
-            {
-                sdf_shift_y = sdf_shift_y / ysize;
-            }
-            xsize = q.x1 - q.x0;
-            ysize = q.y1 - q.y0;
-            sdf_shift_x *= xsize;
-            sdf_shift_y *= ysize;
-
-            auto x0 = q.x0 - sdf_shift_x;
-            auto y0 = q.y0 - sdf_shift_y;
-            auto x1 = q.x1 + sdf_shift_x;
-            auto y1 = q.y1 + sdf_shift_y;
+            auto x0 = q.x0;
+            auto y0 = q.y0;
+            auto x1 = q.x1;
+            auto y1 = q.y1;
 
             // if no kerning table, don't waste time looking
             if (has_kerning_table && cfg.kerning_glyphs_limit > uint32_t(src_tmp.glyphs_count))
@@ -466,8 +448,7 @@ bool build(font_atlas* atlas, std::string& err)
         }
     }
 
-    atlas->finish();
-    return true;
+    return atlas->finish(err);
 }
 }
 } // namespace library_template

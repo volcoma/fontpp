@@ -119,6 +119,46 @@ struct font_glyph
 
 };
 
+inline float calc_shift(float sdf_spread, float dim)
+{
+    return (float(sdf_spread/* + 1*/)) / dim;
+}
+
+inline font_glyph shift(const font_glyph& g, float sdf_shift_x, float sdf_shift_y)
+{
+    font_glyph result{};
+    result.advance_x = g.advance_x;
+    result.codepoint = g.codepoint;
+    result.visible = g.visible;
+
+    float xsize = g.u1 - g.u0;
+    float ysize = g.v1 - g.v0;
+    result.u0 = g.u0 - sdf_shift_x;
+    result.v0 = g.v0 - sdf_shift_y;
+    result.u1 = g.u1 + sdf_shift_x;
+    result.v1 = g.v1 + sdf_shift_y;
+
+    if(xsize > 0.0f)
+    {
+        sdf_shift_x = sdf_shift_x / xsize;
+    }
+    if(ysize > 0.0f)
+    {
+        sdf_shift_y = sdf_shift_y / ysize;
+    }
+    xsize = g.x1 - g.x0;
+    ysize = g.y1 - g.y0;
+    sdf_shift_x *= xsize;
+    sdf_shift_y *= ysize;
+
+    result.x0 = g.x0 - sdf_shift_x;
+    result.y0 = g.y0 - sdf_shift_y;
+    result.x1 = g.x1 + sdf_shift_x;
+    result.y1 = g.y1 + sdf_shift_y;
+
+    return result;
+}
+
 // Helper to build glyph ranges from text/string data. Feed your application strings/characters to it then
 // call build_ranges(). This is essentially a tightly packed of vector of 64k booleans = 8KB storage.
 struct font_glyph_ranges_builder
@@ -294,7 +334,8 @@ struct font_atlas
     const font_glyph* find_glyph_no_fallback(font_wchar c) const;
 
 
-    void finish();
+    bool finish(std::string& err);
+    void generate_sdf();
     void setup_font(font_info* font, font_config* font_config,
                     float ascent,
                     float descent,
@@ -322,7 +363,7 @@ struct font_atlas
     std::vector<font_config> config_data{};
 
     // Build flags
-    font_atlas_flags flags{font_atlas_flags::none};
+    int flags{font_atlas_flags::none};
 
     // Max texture size allowed. Must be a power of 2
     uint32_t max_texture_size{4096};
@@ -337,6 +378,9 @@ struct font_atlas
     uint32_t tex_width{};
     // Texture height calculated during build().
     uint32_t tex_height{};
+
+    std::chrono::milliseconds build_time{};
+    std::chrono::milliseconds sdf_time{};
 };
 
 // Font runtime data and rendering
@@ -410,7 +454,7 @@ struct font_info
     }
 
     // [Internal] Don't use!
-    void build_lookup_table();
+    bool build_lookup_table(std::string& err);
     void clear_output_data();
     void grow_index(size_t new_size);
     void add_glyph(font_wchar c, float x0, float y0, float x1, float y1, float u0, float v0, float u1,
