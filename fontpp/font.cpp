@@ -1405,9 +1405,9 @@ bool font_info::build_lookup_table(std::string& err)
     grow_index(max_codepoint + 1);
     for(size_t i = 0; i < glyphs.size(); i++)
     {
-        auto codepoint = size_t(glyphs[i].codepoint);
-        index_advance_x[codepoint] = glyphs[i].advance_x;
-        index_lookup[codepoint] = font_wchar(i);
+        auto codepoint = glyphs[i].codepoint;
+        index_advance_x[size_t(codepoint)] = glyphs[i].advance_x;
+        index_lookup[size_t(codepoint)] = font_wchar(i);
 
         // Mark 4K page as used
         const unsigned int page_n = codepoint / 4096;
