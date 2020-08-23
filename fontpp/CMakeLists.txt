@@ -43,8 +43,14 @@ else()
     message( FATAL_ERROR "No TTF backend type was selected." )
 endif()
 
+set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
+set(THREADS_PREFER_PTHREAD_FLAG TRUE)
+find_package(Threads REQUIRED REQUIRED)
+
+
 add_library(${target_name} ${libsrc})
 
+target_link_libraries(${target_name} PUBLIC Threads::Threads)
 
 if("${TTF_LOADER}" STREQUAL "FREETYPE")
     target_link_libraries(${target_name} PRIVATE Freetype::Freetype)
