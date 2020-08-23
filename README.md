@@ -27,7 +27,7 @@ int main()
     uint32_t bpp{};
     uint8_t* pixels{};
     //atlas.get_tex_data_as_rgba32(&pixels, &w, &h, &bpp);
-    atlas.get_tex_data_as_rgba8(&pixels, &w, &h, &bpp);
+    atlas.get_tex_data_as_alpha8(&pixels, &w, &h, &bpp);
     
     return 0;
 }
