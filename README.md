@@ -2,7 +2,7 @@
 [![Build status](https://ci.appveyor.com/api/projects/status/kustjvv90nja8dxg?svg=true)](https://ci.appveyor.com/project/volcoma/fontpp)
 
 
-## fontpp c++11 font loading library
+## fontpp c++14 font loading library
 - Supports loading of .ttf/.otf formats
 - Supports 2 backend rasterizers - freetype/stb
 - Supports fast SDF multithreaded generation, even suitable for runtime generation
