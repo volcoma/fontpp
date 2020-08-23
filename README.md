@@ -1,3 +1,7 @@
+[![Build Status](https://travis-ci.org/volcoma/fontpp.svg?branch=master)](https://travis-ci.org/volcoma/fontpp)
+[![Build status](https://ci.appveyor.com/api/projects/status/ytbigal46vf5kr2t?svg=true)](https://ci.appveyor.com/project/volcoma/fontpp)
+
+
 ## fontpp c++11 font loading library
 - Supports loading of .ttf/.otf formats
 - Supports 2 backend rasterizers - freetype/stb
