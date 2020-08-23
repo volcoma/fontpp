@@ -33,14 +33,24 @@ using font_wchar = uint32_t;
 using font_wchar = uint16_t;
 #endif
 
-
-
 struct pair_hash
 {
-	size_t operator()(const std::pair<font_wchar, font_wchar>& pair) const
+    template<typename T>
+    static void hash_combine(std::size_t &seed, T const &key)
+    {
+        std::hash<T> hasher;
+        seed ^= hasher(key) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+    }
+
+	size_t operator()(const std::pair<font_wchar, font_wchar>& p) const
 	{
-        static_assert(sizeof(std::size_t) >= sizeof(font_wchar) * 2, "Hash function does not meet size requirements");
-		return uint32_t(pair.first) << (sizeof(font_wchar) * 2) | uint32_t(pair.second);
+        std::size_t seed(0);
+        hash_combine(seed, p.first);
+        hash_combine(seed, p.second);
+        return seed;
+
+//      static_assert(sizeof(std::size_t) >= sizeof(font_wchar) * 2, "Hash function does not meet size requirements");
+//		return uint32_t(pair.first) << (sizeof(font_wchar) * 2) | uint32_t(pair.second);
 	}
 };
 
