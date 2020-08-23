@@ -1,4 +1,4 @@
-## audiopp c++11 font loading library
+## fontpp c++11 font loading library
 - Supports loading of .ttf/.otf formats
 - Supports 2 backend rasterizers - freetype/stb
 - Supports fast SDF multithreaded generation, even suitable for runtime generation
