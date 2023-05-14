@@ -1,20 +1,20 @@
 #pragma once
 #include <algorithm>
-#include <cassert>
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <limits>
 #include <memory>
-#include <string>
-#include <unordered_map>
 #include <vector>
 
 namespace fnt
 {
+
+namespace
+{
+uint32_t distance(uint32_t x, uint32_t y)
+{
+    return x < y ? y - x : x - y;
+}
+}
 
 inline uint32_t upper_power_of_two(uint32_t v)
 {
@@ -38,8 +38,13 @@ inline uint32_t estimate_width(uint32_t max, uint32_t min, uint32_t surface_sqrt
     uint32_t width = max;
     while(width > min)
     {
-        if(surface_sqrt >= width * 0.67f)
+        if(width / 2 < surface_sqrt)
         {
+            // The estimated width should be bigger (if possible) than the surface height.
+            if(distance(width, surface_sqrt) < surface_sqrt * 0.1f)
+            {
+                return std::min(width * 2, max);
+            }
             return width;
         }
 
@@ -99,10 +104,8 @@ struct bit_vector
 #include <mutex>
 #include <queue>
 #include <thread>
-#include <vector>
 #include <condition_variable>
 #include <future>
-#include <stdexcept>
 
 namespace parallel
 {

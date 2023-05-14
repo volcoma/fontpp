@@ -33,7 +33,9 @@
 
 #include <ft2build.h>
 #include <freetype/tttables.h>
-#include <iostream>
+#include <assert.h>
+#include <cstring>
+#include <cmath>
 
 #include FT_FREETYPE_H  // <freetype/freetype.h>
 #include FT_GLYPH_H     // <freetype/ftglyph.h>
@@ -547,14 +549,20 @@ bool build(FT_Library ft_library, font_atlas* atlas, std::string& err, unsigned 
                 src_tmp.dst_index = static_cast<int>(output_i);
         assert(src_tmp.dst_index != -1); // cfg.DstFont not pointing within atlas->fonts[] array?
         if(src_tmp.dst_index == -1)
+        {
+            err = "cfg.DstFont not pointing within atlas->fonts[] array?";
             return false;
+        }
 
         font_ft& font_face = src_tmp.font;
 
         //-----------------------------
         // Load font
         if(!font_face.init(ft_library, cfg, extra_flags))
+        {
+            err = "Could not load font via Freetype";
             return false;
+        }
         //-----------------------------
 
         // Measure highest codepoints
@@ -873,8 +881,10 @@ bool build(font_atlas* atlas, std::string& err, unsigned int extra_flags)
     FT_Library ft_library;
     FT_Error error = FT_Init_FreeType(&ft_library);
     if(error != 0)
+    {
+        err = "Could not init Freetype";
         return false;
-
+    }
     // If you don't call FT_Add_Default_Modules() the rest of code may work, but FreeType won't use our custom
     // allocator.
     FT_Add_Default_Modules(ft_library);

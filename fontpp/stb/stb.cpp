@@ -146,20 +146,19 @@ bool build(font_atlas* atlas, std::string& err)
             dst_tmp.glyphs_set.resize(dst_tmp.glyphs_highest + 1);
 
         for(const font_wchar* src_range = src_tmp.src_ranges; src_range[0] && src_range[1]; src_range += 2)
-            for(int codepoint = src_range[0]; codepoint <= src_range[1]; codepoint++)
+            for(font_wchar codepoint = src_range[0]; codepoint <= src_range[1]; codepoint++)
             {
-                if(dst_tmp.glyphs_set.get_bit(
-                        codepoint)) // Don't overwrite existing glyphs. We could make this
+                if(dst_tmp.glyphs_set.get_bit(int(codepoint))) // Don't overwrite existing glyphs. We could make this
                     // an option for MergeMode (e.g. MergeOverwrite==true)
                     continue;
-                if(!stbtt_FindGlyphIndex(&src_tmp.font_info, codepoint)) // It is actually in the font?
+                if(!stbtt_FindGlyphIndex(&src_tmp.font_info, int(codepoint))) // It is actually in the font?
                     continue;
 
                 // Add to avail set/counters
                 src_tmp.glyphs_count++;
                 dst_tmp.glyphs_count++;
-                src_tmp.glyphs_set.set_bit(codepoint, true);
-                dst_tmp.glyphs_set.set_bit(codepoint, true);
+                src_tmp.glyphs_set.set_bit(int(codepoint), true);
+                dst_tmp.glyphs_set.set_bit(int(codepoint), true);
                 total_glyphs_count++;
             }
     }
@@ -276,6 +275,7 @@ bool build(font_atlas* atlas, std::string& err)
     if(atlas->tex_width == 0 || atlas->tex_height == 0)
     {
         err = "No glyphs were loaded.";
+        stbtt_PackEnd(&spc); // frees spc
         return false;
     }
 
@@ -284,6 +284,7 @@ bool build(font_atlas* atlas, std::string& err)
         err = "Required [" + std::to_string(atlas->tex_height) +
               "] size is too big. Consider creating the font with a lower size and "
               "upscaling it when displaying.";
+        stbtt_PackEnd(&spc); // frees spc
         return false;
     }
 
@@ -315,6 +316,7 @@ bool build(font_atlas* atlas, std::string& err)
             err = "Required [" + std::to_string(src_tmp.glyphs_count) +
                   "] glyphs are too many. Consider creating the font with a lower size and "
                   "upscaling it when displaying.";
+            stbtt_PackEnd(&spc); // frees spc
             return false;
         }
         // Apply multiply operator

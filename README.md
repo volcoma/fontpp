@@ -1,6 +1,6 @@
-[![Build Status](https://travis-ci.org/volcoma/fontpp.svg?branch=master)](https://travis-ci.org/volcoma/fontpp)
-[![Build status](https://ci.appveyor.com/api/projects/status/kustjvv90nja8dxg?svg=true)](https://ci.appveyor.com/project/volcoma/fontpp)
-
+![windows](https://github.com/volcoma/fontpp/actions/workflows/windows.yml/badge.svg)
+![linux](https://github.com/volcoma/fontpp/actions/workflows/linux.yml/badge.svg)
+![macos](https://github.com/volcoma/fontpp/actions/workflows/macos.yml/badge.svg)
 
 ## fontpp c++14 font loading library
 - Supports loading of .ttf/.otf formats

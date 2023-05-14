@@ -1,5 +1,6 @@
 #pragma once
 #include "utils.h"
+#include <unordered_map>
 
 namespace fnt
 {
@@ -48,9 +49,6 @@ struct pair_hash
         hash_combine(seed, p.first);
         hash_combine(seed, p.second);
         return seed;
-
-//      static_assert(sizeof(std::size_t) >= sizeof(font_wchar) * 2, "Hash function does not meet size requirements");
-//		return uint32_t(pair.first) << (sizeof(font_wchar) * 2) | uint32_t(pair.second);
 	}
 };
 
@@ -239,7 +237,6 @@ const font_wchar* get_glyph_ranges_chinese_full();
 
 // Store all official characters for Simplified Chinese.
 // Sourced from https://en.wikipedia.org/wiki/Table_of_General_Standard_Chinese_Characters
-// (Stored as accumulative offsets from the initial unicode codepoint 0x4E00. This encoding is designed to helps us compact the source code size.)
 const font_wchar* get_glyph_ranges_chinese_simplified_official();
 // Default + Half-Width + Japanese
 // Hiragana/Katakana + set of 2500 CJK Unified
@@ -253,7 +250,7 @@ const font_wchar* get_glyph_ranges_thai();
 // Default + Vietname characters
 const font_wchar* get_glyph_ranges_vietnamese();
 
-// Default + Currency
+// Default + Arabic characters
 const font_wchar* get_glyph_ranges_arabic();
 
 // Default + Currency
@@ -285,7 +282,13 @@ std::string unicode_to_utf8(const unsigned int* in_text, const unsigned int* in_
 // them in the future!
 struct font_atlas
 {
+    font_atlas() noexcept = default;
+    font_atlas(const font_atlas&) = delete;
+    font_atlas(font_atlas&& rhs) noexcept;
+    font_atlas& operator=(const font_atlas& rhs) = delete;
+    font_atlas& operator=(font_atlas&&) noexcept;
     ~font_atlas();
+
     font_info* add_font(const font_config* font_cfg);
     font_info* add_font_default(const font_config* font_cfg = nullptr);
     font_info* add_font_from_file_ttf(const char* filename, float size_pixels,
@@ -391,6 +394,8 @@ struct font_atlas
 
     std::chrono::milliseconds build_time{};
     std::chrono::milliseconds sdf_time{};
+private:
+    void move(font_atlas&&) noexcept;
 };
 
 // Font runtime data and rendering

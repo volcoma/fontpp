@@ -7,7 +7,7 @@ constexpr int CAPS_LEN = 666;
 
 using lv_t = std::pair<uint32_t, uint32_t>;
 using lut_t = std::array<lv_t, CAPS_LEN>;
-constexpr static const lut_t caps_table = {
+constexpr static const lut_t caps_table = {{
 	lv_t{0x0061, 0x0041},
 	lv_t{0x0062, 0x0042},
 	lv_t{0x0063, 0x0043},
@@ -674,7 +674,7 @@ constexpr static const lut_t caps_table = {
 	lv_t{0xFF58, 0xFF38},
 	lv_t{0xFF59, 0xFF39},
 	lv_t{0xFF5A, 0xFF3A},
-};
+}};
 
 template<typename T, size_t N>
 struct case_table

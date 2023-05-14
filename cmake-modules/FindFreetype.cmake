@@ -32,6 +32,8 @@ This module will set the following variables in your project:
     directory holding Freetype public headers
 ``FREETYPE_LIBRARIES``
   the library to link against
+``FREETYPE_SHARED_LIBRARIES``
+  libraries (DLLS)to copy to the executable
 ``FREETYPE_VERSION_STRING``
   the version of freetype found (since CMake 2.8.8)
 
@@ -59,7 +61,6 @@ directory of a Freetype installation.
 # wants explicit full paths and this trickery doesn't work too well.
 # I'm going to attempt to cut out the middleman and hope
 # everything still works.
-
 set(FREETYPE_FIND_ARGS
   HINTS
     ENV FREETYPE_DIR
@@ -101,6 +102,16 @@ if(NOT FREETYPE_LIBRARY)
     PATH_SUFFIXES
       lib
   )
+
+  find_file(FREETYPE_SHARED_LIBRARY_RELEASE
+	  NAMES
+		freetype.dll
+		libfreetype.dll
+		freetype219.dll
+	  ${FREETYPE_FIND_ARGS}
+	  PATH_SUFFIXES
+		lib
+  )
   find_library(FREETYPE_LIBRARY_DEBUG
     NAMES
       freetyped
@@ -110,11 +121,23 @@ if(NOT FREETYPE_LIBRARY)
     PATH_SUFFIXES
       lib
   )
+
+  find_file(FREETYPE_SHARED_LIBRARY_DEBUG
+	  NAMES
+		freetyped.dll
+		libfreetyped.dll
+		freetype219d.dll
+	  ${FREETYPE_FIND_ARGS}
+	  PATH_SUFFIXES
+		lib
+  )
   include(SelectLibraryConfigurations)
   select_library_configurations(FREETYPE)
+  select_library_configurations(FREETYPE_SHARED)
 else()
   # on Windows, ensure paths are in canonical format (forward slahes):
   file(TO_CMAKE_PATH "${FREETYPE_LIBRARY}" FREETYPE_LIBRARY)
+  file(TO_CMAKE_PATH "${FREETYPE_SHARED_LIBRARY}" FREETYPE_SHARED_LIBRARY)
 endif()
 
 unset(FREETYPE_FIND_ARGS)
@@ -125,6 +148,7 @@ if(FREETYPE_INCLUDE_DIR_ft2build AND FREETYPE_INCLUDE_DIR_freetype2)
   list(REMOVE_DUPLICATES FREETYPE_INCLUDE_DIRS)
 endif()
 set(FREETYPE_LIBRARIES "${FREETYPE_LIBRARY}")
+set(FREETYPE_SHARED_LIBRARIES "${FREETYPE_SHARED_LIBRARY}")
 
 if(EXISTS "${FREETYPE_INCLUDE_DIR_freetype2}/freetype/freetype.h")
   set(FREETYPE_H "${FREETYPE_INCLUDE_DIR_freetype2}/freetype/freetype.h")

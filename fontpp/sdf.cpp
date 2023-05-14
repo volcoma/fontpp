@@ -3,7 +3,8 @@
 
 #include <cmath>
 #include <cstdlib>
-#include <cfloat>
+#include <cassert>
+
 #define SDF_MAX_PASSES 1		// Maximum number of distance transform passes
 #define SDF_SLACK 0.001f		// Controls how much smaller the neighbour value must be to cosnider, too small slack increse iteration count.
 #define SDF_SQRT2 1.4142136f	// sqrt(2)
@@ -177,6 +178,7 @@ void sweep_and_update_block(const rect& block, unsigned char* out, int outstride
     whole_block.h = block.h + (has_top_shared_region ? shared_region : 0) + (has_bottom_shared_region ? shared_region : 0);
     whole_block.x = block.x - (has_left_shared_region ? shared_region : 0);
     whole_block.y = block.y - (has_bottom_shared_region ? shared_region : 0);
+    assert(whole_block.y + whole_block.h <= height && whole_block.x + whole_block.w <= width);
 
     const auto block_total_cells = static_cast<size_t>(whole_block.w) * static_cast<size_t>(whole_block.h);
 
@@ -408,15 +410,33 @@ void sweep_and_update_sdf(unsigned char* out, int outstride, float radius,
     const auto max_pixels_per_block_memory_wise = (max_allowed_memory_usage_hint / hint) / MEMORY_PER_PIXEL;
     const auto max_pixels_per_block_thread_wise = (width * height) / hint;
     const auto max_pixels_per_block = std::min(max_pixels_per_block_memory_wise, max_pixels_per_block_thread_wise);
+    const auto r = static_cast<int>(radius);
     auto block_side = static_cast<int>(std::floor(std::sqrt(max_pixels_per_block))); // using square blocks for simplicity
+    block_side = std::max(block_side, r);
 
     auto rows = height / block_side + (height % block_side != 0 ? 1 : 0);
     auto cols = width / block_side + (width % block_side != 0 ? 1 : 0);
 
     int jobs = std::max(hint, rows * cols);
 
-    const auto last_block_col_width = width - block_side * (cols - 1);
-    const auto last_block_row_height = height - block_side * (rows - 1);
+    auto last_block_col_width = width - block_side * (cols - 1);
+    auto last_block_row_height = height - block_side * (rows - 1);
+
+    // If the last block column width or the last row height is smaller than the radius,
+    // then they will be added to the previous column/row because it's not worth it to be handled separatly.
+    // (there is a sharable region with radius size between adjacent blocks)
+    if(last_block_col_width < r)
+    {
+        assert(cols > 0);
+        --cols;
+        last_block_col_width += block_side;
+    }
+    if(last_block_row_height < r)
+    {
+        assert(rows > 0);
+        --rows;
+        last_block_row_height += block_side;
+    }
 
     auto inner_loop = [=](const int block_row_idx, const int block_col_idx)
     {
